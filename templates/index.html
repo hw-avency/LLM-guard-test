@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Guard API Client</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 2rem; max-width: 900px; margin-inline: auto; }
+    h1 { margin-top: 0; }
+    .card { border: 1px solid #6664; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; }
+    .row { display: grid; gap: .75rem; }
+    input, textarea, button { font: inherit; padding: .6rem .75rem; border-radius: .5rem; border: 1px solid #7775; width: 100%; box-sizing: border-box; }
+    textarea { min-height: 160px; }
+    button { cursor: pointer; font-weight: 600; }
+    pre { white-space: pre-wrap; word-break: break-word; background: #0001; border-radius: .5rem; padding: .75rem; }
+    .muted { opacity: .8; }
+    .ok { color: #2e8b57; }
+    .warn { color: #cc7a00; }
+  </style>
+</head>
+<body>
+  <h1>LLM Guard API Client</h1>
+
+  <div class="card muted">
+    <p><strong>API_URL:</strong> {{ api_url if api_url else 'nicht gesetzt' }}</p>
+    <p><strong>AUTH_TOKEN:</strong> <span class="{{ 'ok' if auth_configured else 'warn' }}">{{ 'gesetzt' if auth_configured else 'nicht gesetzt' }}</span></p>
+    <p>Diese App sendet Requests serverseitig an deine LLM Guard API.</p>
+  </div>
+
+  <div class="card row">
+    <label for="endpoint">Endpoint (relativ zu API_URL)</label>
+    <input id="endpoint" value="/analyze/prompt" />
+
+    <label for="body">JSON Body</label>
+    <textarea id="body">{
+  "prompt": "Hello from Cloud Run"
+}</textarea>
+
+    <button id="send">Request senden</button>
+  </div>
+
+  <div class="card">
+    <h2>Antwort</h2>
+    <pre id="result">Noch keine Anfrage gesendet.</pre>
+  </div>
+
+<script>
+const sendBtn = document.getElementById('send');
+const result = document.getElementById('result');
+
+sendBtn.addEventListener('click', async () => {
+  const endpoint = document.getElementById('endpoint').value.trim();
+  let body;
+
+  try {
+    body = JSON.parse(document.getElementById('body').value);
+  } catch (e) {
+    result.textContent = 'Ungültiges JSON im Body: ' + e.message;
+    return;
+  }
+
+  result.textContent = 'Sende Anfrage...';
+
+  try {
+    const res = await fetch('/api/forward', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endpoint, body })
+    });
+
+    const data = await res.json();
+    result.textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    result.textContent = 'Fehler: ' + e.message;
+  }
+});
+</script>
+</body>
+</html>
