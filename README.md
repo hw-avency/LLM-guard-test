@@ -7,6 +7,7 @@ Kleine Flask-Webapp, um eine bestehende `llm-guard` API-Instanz über ein Browse
 - Konfiguration via ENV:
   - `API_URL` (z. B. `https://deine-llm-guard-api.example.com`)
   - `AUTH_TOKEN` (Bearer Token)
+  - `UPSTREAM_TIMEOUT_SECONDS` (optional, Default `120`)
 - Einfaches Webinterface für:
   - Endpoint-Pfad (Default `/analyze/prompt`)
   - JSON Request Body
@@ -21,6 +22,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 export API_URL="https://YOUR_LLM_GUARD_URL"
 export AUTH_TOKEN="YOUR_TOKEN"
+export UPSTREAM_TIMEOUT_SECONDS="120"
 python app.py
 ```
 
@@ -33,6 +35,7 @@ docker build -t llm-guard-web-client .
 docker run --rm -p 8080:8080 \
   -e API_URL="https://YOUR_LLM_GUARD_URL" \
   -e AUTH_TOKEN="YOUR_TOKEN" \
+  -e UPSTREAM_TIMEOUT_SECONDS="120" \
   llm-guard-web-client
 ```
 
@@ -43,7 +46,7 @@ gcloud run deploy llm-guard-web-client \
   --source . \
   --region europe-west1 \
   --allow-unauthenticated \
-  --set-env-vars API_URL="https://YOUR_LLM_GUARD_URL",AUTH_TOKEN="YOUR_TOKEN"
+  --set-env-vars API_URL="https://YOUR_LLM_GUARD_URL",AUTH_TOKEN="YOUR_TOKEN",UPSTREAM_TIMEOUT_SECONDS="120"
 ```
 
 > Hinweis: Für produktive Nutzung sollte der `AUTH_TOKEN` als Secret (Secret Manager) eingebunden werden.

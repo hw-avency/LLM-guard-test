@@ -11,7 +11,12 @@ app = Flask(__name__)
 def get_config() -> Dict[str, str]:
     api_url = os.getenv("API_URL", "").strip()
     auth_token = os.getenv("AUTH_TOKEN", "").strip()
-    return {"api_url": api_url, "auth_token": auth_token}
+    upstream_timeout_seconds = os.getenv("UPSTREAM_TIMEOUT_SECONDS", "120").strip()
+    return {
+        "api_url": api_url,
+        "auth_token": auth_token,
+        "upstream_timeout_seconds": upstream_timeout_seconds,
+    }
 
 
 @app.get("/")
@@ -32,6 +37,14 @@ def forward_request() -> Any:
     if not config["auth_token"]:
         return jsonify({"error": "AUTH_TOKEN ist nicht gesetzt."}), 500
 
+    try:
+        timeout_seconds = int(config["upstream_timeout_seconds"])
+    except ValueError:
+        return jsonify({"error": "UPSTREAM_TIMEOUT_SECONDS muss eine Ganzzahl sein."}), 500
+
+    if timeout_seconds <= 0:
+        return jsonify({"error": "UPSTREAM_TIMEOUT_SECONDS muss > 0 sein."}), 500
+
     payload = request.get_json(silent=True) or {}
     endpoint = str(payload.get("endpoint", "/analyze/prompt")).strip()
     body = payload.get("body", {})
@@ -49,7 +62,7 @@ def forward_request() -> Any:
     }
 
     try:
-        response = requests.post(target_url, headers=headers, json=body, timeout=30)
+        response = requests.post(target_url, headers=headers, json=body, timeout=timeout_seconds)
     except requests.RequestException as exc:
         return jsonify({"error": "Anfrage an LLM Guard fehlgeschlagen.", "detail": str(exc)}), 502
 
