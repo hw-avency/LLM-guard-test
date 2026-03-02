@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 import requests
 from flask import Flask, jsonify, render_template, request
@@ -19,18 +19,7 @@ def get_config() -> Dict[str, str]:
     }
 
 
-@app.get("/")
-def index() -> str:
-    config = get_config()
-    return render_template(
-        "index.html",
-        api_url=config["api_url"],
-        auth_configured=bool(config["auth_token"]),
-    )
-
-
-@app.post("/api/forward")
-def forward_request() -> Any:
+def forward_to_upstream(endpoint: str, body: Dict[str, Any]) -> Tuple[Any, int]:
     config = get_config()
     if not config["api_url"]:
         return jsonify({"error": "API_URL ist nicht gesetzt."}), 500
@@ -45,15 +34,8 @@ def forward_request() -> Any:
     if timeout_seconds <= 0:
         return jsonify({"error": "UPSTREAM_TIMEOUT_SECONDS muss > 0 sein."}), 500
 
-    payload = request.get_json(silent=True) or {}
-    endpoint = str(payload.get("endpoint", "/analyze/prompt")).strip()
-    body = payload.get("body", {})
-
     if not endpoint.startswith("/"):
         endpoint = f"/{endpoint}"
-
-    if not isinstance(body, dict):
-        return jsonify({"error": "body muss ein JSON-Objekt sein."}), 400
 
     target_url = f"{config['api_url'].rstrip('/')}{endpoint}"
     headers = {
@@ -82,6 +64,42 @@ def forward_request() -> Any:
             "response": data,
         }
     ), response.status_code
+
+
+@app.get("/")
+def index() -> str:
+    config = get_config()
+    return render_template(
+        "index.html",
+        api_url=config["api_url"],
+        auth_configured=bool(config["auth_token"]),
+    )
+
+
+@app.post("/api/forward")
+def forward_request() -> Any:
+    payload = request.get_json(silent=True) or {}
+    endpoint = str(payload.get("endpoint", "/analyze/prompt")).strip()
+    body = payload.get("body", {})
+
+    if not isinstance(body, dict):
+        return jsonify({"error": "body muss ein JSON-Objekt sein."}), 400
+
+    return forward_to_upstream(endpoint=endpoint, body=body)
+
+
+@app.post("/analyze/prompt")
+def analyze_prompt() -> Any:
+    body = request.get_json(silent=True) or {}
+    if not isinstance(body, dict):
+        return jsonify({"error": "Request body muss ein JSON-Objekt sein."}), 400
+
+    return forward_to_upstream(endpoint="/analyze/prompt", body=body)
+
+
+@app.errorhandler(404)
+def not_found(_error: Exception) -> Any:
+    return jsonify({"error": "Endpoint nicht gefunden."}), 404
 
 
 if __name__ == "__main__":
