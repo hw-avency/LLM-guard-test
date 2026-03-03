@@ -26,6 +26,8 @@
     .result-grid { display: grid; gap: .65rem; }
     .result-row { padding: .5rem .65rem; border: 1px solid #7775; border-radius: .5rem; background: #00000008; }
     .result-row strong { display: inline-block; min-width: 220px; }
+    .compare-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin-top: .45rem; }
+    .compare-column { border: 1px solid #7775; border-radius: .45rem; padding: .5rem; background: #00000008; }
     .highlight-box { white-space: pre-wrap; word-break: break-word; line-height: 1.45; }
     .critical-highlight { background: color-mix(in srgb, #d23f3f 30%, transparent); color: #ffb1b1; border-radius: .2rem; padding: 0 .1rem; }
     .inserted-highlight { background: color-mix(in srgb, #2e8b57 25%, transparent); color: #b8f0cb; border-radius: .2rem; padding: 0 .1rem; }
@@ -39,6 +41,7 @@
     .scanner-list li { margin: .2rem 0; }
     @media (max-width: 800px) {
       .dual-grid { grid-template-columns: 1fr; }
+      .compare-columns { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -300,10 +303,16 @@ function formatResultView(data, debug) {
           <span class="legend-item"><span class="legend-swatch legend-swatch-critical"></span> Kritisch erkannt (im Original entfernt/geändert)</span>
           <span class="legend-item"><span class="legend-swatch legend-swatch-inserted"></span> Durch Sanitizing ergänzt/ersetzt</span>
         </div>
-        <div><small class="muted">Original</small></div>
-        <div class="highlight-box">${promptDiff.originalHtml}</div>
-        <div style="margin-top:.45rem;"><small class="muted">Bereinigt</small></div>
-        <div class="highlight-box">${promptDiff.sanitizedHtml}</div>
+        <div class="compare-columns">
+          <div class="compare-column">
+            <div><small class="muted">Original</small></div>
+            <div class="highlight-box">${promptDiff.originalHtml}</div>
+          </div>
+          <div class="compare-column">
+            <div><small class="muted">Bereinigt</small></div>
+            <div class="highlight-box">${promptDiff.sanitizedHtml}</div>
+          </div>
+        </div>
       </div>
       <div class="result-row">
         <strong>Kritische Stellen im Output</strong>
@@ -311,10 +320,16 @@ function formatResultView(data, debug) {
           <span class="legend-item"><span class="legend-swatch legend-swatch-critical"></span> Kritisch erkannt (im Original entfernt/geändert)</span>
           <span class="legend-item"><span class="legend-swatch legend-swatch-inserted"></span> Durch Sanitizing ergänzt/ersetzt</span>
         </div>
-        <div><small class="muted">Original</small></div>
-        <div class="highlight-box">${outputDiff.originalHtml}</div>
-        <div style="margin-top:.45rem;"><small class="muted">Bereinigt</small></div>
-        <div class="highlight-box">${outputDiff.sanitizedHtml}</div>
+        <div class="compare-columns">
+          <div class="compare-column">
+            <div><small class="muted">Original</small></div>
+            <div class="highlight-box">${outputDiff.originalHtml}</div>
+          </div>
+          <div class="compare-column">
+            <div><small class="muted">Bereinigt</small></div>
+            <div class="highlight-box">${outputDiff.sanitizedHtml}</div>
+          </div>
+        </div>
       </div>
       <div class="result-row"><strong>Scanner-Details</strong>${scannerThresholdRows || ' Keine Scannerdetails in der Antwort vorhanden.'}</div>
     </div>
