@@ -6,44 +6,45 @@
   <title>LLM Guard API Client</title>
   <style>
     :root { color-scheme: light dark; }
-    body { font-family: system-ui, sans-serif; margin: 0; padding: 2rem; max-width: 1100px; margin-inline: auto; }
-    h1 { margin-top: 0; }
-    .card { border: 1px solid #6664; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; }
-    .row { display: grid; gap: .75rem; }
-    .inline { display: flex; gap: .5rem; flex-wrap: wrap; }
-    input, select, textarea, button { font: inherit; padding: .6rem .75rem; border-radius: .5rem; border: 1px solid #7775; width: 100%; box-sizing: border-box; }
-    textarea { min-height: 120px; }
+    body { font-family: system-ui, sans-serif; margin: 0; padding: .75rem; max-width: 1200px; margin-inline: auto; font-size: 14px; line-height: 1.3; }
+    h1 { margin: 0 0 .4rem; font-size: 1.3rem; }
+    h2 { margin: 0; font-size: 1.02rem; }
+    .card { border: 1px solid #6664; border-radius: 8px; padding: .55rem .7rem; margin-bottom: .55rem; }
+    .row { display: grid; gap: .45rem; }
+    .inline { display: flex; gap: .4rem; flex-wrap: wrap; }
+    input, select, textarea, button { font: inherit; padding: .4rem .55rem; border-radius: .45rem; border: 1px solid #7775; width: 100%; box-sizing: border-box; }
+    textarea { min-height: 76px; }
     button { cursor: pointer; font-weight: 600; }
     .inline button { width: auto; }
     .tab-button { opacity: .8; }
     .tab-button.active { opacity: 1; border-color: #2e8b57; }
-    pre { white-space: pre-wrap; word-break: break-word; background: #0001; border-radius: .5rem; padding: .75rem; }
+    pre { white-space: pre-wrap; word-break: break-word; background: #0001; border-radius: .45rem; padding: .45rem .55rem; margin: .2rem 0 0; max-height: 240px; overflow: auto; }
     .muted { opacity: .8; }
     .ok { color: #2e8b57; }
     .warn { color: #cc7a00; }
     .bad { color: #d23f3f; }
     details summary { cursor: pointer; font-weight: 600; }
-    .result-grid { display: grid; gap: .65rem; }
-    .result-row { padding: .5rem .65rem; border: 1px solid #7775; border-radius: .5rem; background: #00000008; }
+    .result-grid { display: grid; gap: .4rem; }
+    .result-row { padding: .35rem .5rem; border: 1px solid #7775; border-radius: .4rem; background: #00000008; }
     .result-row strong { display: inline-block; min-width: 220px; }
     .scanner-status-row { display: flex; justify-content: space-between; align-items: baseline; gap: .75rem; flex-wrap: wrap; }
     .scanner-status-line { white-space: nowrap; }
-    .compare-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin-top: .45rem; }
-    .compare-column { border: 1px solid #7775; border-radius: .45rem; padding: .5rem; background: #00000008; }
+    .compare-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; margin-top: .3rem; }
+    .compare-column { border: 1px solid #7775; border-radius: .4rem; padding: .35rem .45rem; background: #00000008; }
     .highlight-box { white-space: pre-wrap; word-break: break-word; line-height: 1.45; }
     .critical-highlight { background: #ffd7d7; color: #4a1010; border-radius: .2rem; padding: 0 .1rem; font-weight: 600; }
     .inserted-highlight { background: #d9f5e6; color: #0f3d24; border-radius: .2rem; padding: 0 .1rem; font-weight: 600; }
-    .legend { display: flex; flex-wrap: wrap; gap: .6rem; font-size: .92rem; margin-bottom: .4rem; }
+    .legend { display: flex; flex-wrap: wrap; gap: .4rem; font-size: .88rem; margin-bottom: .2rem; }
     .legend-item { display: inline-flex; align-items: center; gap: .3rem; }
     .legend-swatch { width: .9rem; height: .9rem; border-radius: .2rem; display: inline-block; }
     .legend-swatch-critical { background: #ffd7d7; border: 1px solid #c44949; }
     .legend-swatch-inserted { background: #d9f5e6; border: 1px solid #2e8b57; }
-    .dual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+    .dual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
     .column-stack { align-content: start; }
-    .column-stack pre { min-height: 220px; }
-    .scanner-panel { max-height: 130px; overflow-y: auto; border: 1px solid #7775; border-radius: .45rem; padding: 4px 8px; background: #00000008; }
-    .scanner-list { margin: 4px 0; padding-left: 1rem; }
-    .scanner-list li { margin: 1px 0; }
+    .column-stack pre { min-height: 150px; max-height: 210px; }
+    .scanner-panel { max-height: 92px; overflow-y: auto; border: 1px solid #7775; border-radius: .4rem; padding: 2px 6px; background: #00000008; }
+    .scanner-list { margin: 2px 0; padding-left: .9rem; }
+    .scanner-list li { margin: 0; }
     .scanner-list li { display: flex; align-items: center; gap: .4rem; }
     .scanner-list li.hit { background: #ffd7d766; border-radius: .25rem; }
     .scanner-list li.hit code { color: #b22f2f; font-weight: 700; }
@@ -59,16 +60,10 @@
 <body>
   <h1>LLM Guard API Client</h1>
 
-  <div class="card muted">
-    <p><strong>API_URL:</strong> {{ api_url if api_url else 'nicht gesetzt' }}</p>
-    <p><strong>AUTH_TOKEN:</strong> <span class="{{ 'ok' if auth_configured else 'warn' }}">{{ 'gesetzt' if auth_configured else 'nicht gesetzt' }}</span></p>
-    <p>Diese App sendet Requests serverseitig an deine LLM Guard API.</p>
-  </div>
-
   <div class="card row">
     <div class="dual-grid">
       <div class="row column-stack">
-        <h2 style="margin: 0;">Prompt</h2>
+        <h2>Prompt</h2>
         <div class="scanner-panel">
           <strong>Aktive Prompt-Scanner:</strong>
           <ul id="promptScanners" class="scanner-list">
@@ -84,7 +79,7 @@
       </div>
 
       <div class="row column-stack">
-        <h2 style="margin: 0;">Output</h2>
+        <h2>Output</h2>
         <div class="scanner-panel">
           <strong>Aktive Output-Scanner:</strong>
           <ul id="outputScanners" class="scanner-list">
@@ -256,7 +251,6 @@ function formatResultView(data, debug, durationMs, mode) {
   const requestBody = debug?.request?.json_body || {};
   const configuredScanners = mode === 'output' ? cachedOutputScanners : cachedPromptScanners;
 
-  const scannerStatuses = collectScannerStatuses(response, mode, configuredScanners);
   const sanitizedPrompt = firstDefined(
     response?.sanitized_prompt,
     response?.prompt_sanitized,
@@ -272,6 +266,14 @@ function formatResultView(data, debug, durationMs, mode) {
   const rawOutput = firstDefined(requestBody?.output, response?.output, '');
   const promptDiff = formatHighlightedText(rawPrompt, sanitizedPrompt);
   const outputDiff = formatHighlightedText(rawOutput, sanitizedOutput);
+
+  const outputWasSanitized = mode === 'output'
+    && String(rawOutput ?? '') !== String(sanitizedOutput ?? '');
+
+  const scannerStatuses = collectScannerStatuses(response, mode, configuredScanners, {
+    forceTriggeredScanners: outputWasSanitized ? ['Deanonymize'] : [],
+    noScoreScanners: outputWasSanitized ? ['Deanonymize'] : []
+  });
 
   const promptCriticalSection = `
       <div class="result-row">
@@ -310,7 +312,9 @@ function formatResultView(data, debug, durationMs, mode) {
         <div class="scanner-status-row">
           <strong>${escapeHtml(scanner.name)}</strong>
           <span class="scanner-status-line ${scanner.triggered ? 'bad' : 'ok'}"><strong>${scanner.triggered ? 'Positiv / Aktion nötig' : 'Negativ / Keine Aktion nötig'}</strong></span>
-          <small class="scanner-status-line muted">Score: <code>${escapeHtml(scanner.scoreLabel)}</code> · Threshold: <code>${escapeHtml(scanner.thresholdLabel)}</code></small>
+          ${scanner.hideScore
+            ? '<small class="scanner-status-line muted">Regelbasierte Erkennung (Text verändert)</small>'
+            : `<small class="scanner-status-line muted">Score: <code>${escapeHtml(scanner.scoreLabel)}</code> · Threshold: <code>${escapeHtml(scanner.thresholdLabel)}</code></small>`}
         </div>
       </div>
     `).join('')
@@ -325,10 +329,12 @@ function formatResultView(data, debug, durationMs, mode) {
   `;
 }
 
-function collectScannerStatuses(responsePayload, mode, configuredScanners = []) {
+function collectScannerStatuses(responsePayload, mode, configuredScanners = [], options = {}) {
   const response = normalizeResponsePayload(responsePayload || {});
   const scannerMap = new Map();
   const thresholdMap = mode === 'output' ? scannerThresholds.output : scannerThresholds.input;
+  const forceTriggered = new Set(asList(options.forceTriggeredScanners).map((name) => normalizeScannerName(name)));
+  const hideScore = new Set(asList(options.noScoreScanners).map((name) => normalizeScannerName(name)));
 
   function parseNumber(value) {
     const asNumber = Number(value);
@@ -351,7 +357,7 @@ function collectScannerStatuses(responsePayload, mode, configuredScanners = []) 
     return false;
   }
 
-  function addStatus(name, score, threshold, state) {
+  function addStatus(name, score, threshold, state, overrides = {}) {
     if (typeof name !== 'string' || !name.trim()) return;
     const normalizedName = normalizeScannerName(name);
     if (!normalizedName) return;
@@ -360,13 +366,15 @@ function collectScannerStatuses(responsePayload, mode, configuredScanners = []) 
     const resolvedScore = score ?? current.score;
     const resolvedThreshold = threshold ?? thresholdMap.get(normalizedName);
     const resolvedState = state ?? current.status;
-    const triggered = evaluateScanner(resolvedScore, resolvedThreshold, resolvedState);
+    const forcedTriggered = overrides.forceTriggered || forceTriggered.has(normalizedName);
+    const triggered = forcedTriggered || evaluateScanner(resolvedScore, resolvedThreshold, resolvedState);
     scannerMap.set(normalizedName, {
       name: current.name || name.trim(),
       score: resolvedScore,
       threshold: resolvedThreshold,
       status: resolvedState,
-      triggered
+      triggered,
+      hideScore: overrides.hideScore || hideScore.has(normalizedName)
     });
   }
 
@@ -473,12 +481,29 @@ function collectScannerStatuses(responsePayload, mode, configuredScanners = []) 
 
   walk(response);
 
+  for (const normalizedName of forceTriggered) {
+    if (!normalizedName) continue;
+    const existing = scannerMap.get(normalizedName);
+    if (existing) {
+      scannerMap.set(normalizedName, {
+        ...existing,
+        triggered: true,
+        hideScore: existing.hideScore || hideScore.has(normalizedName)
+      });
+    } else {
+      const fallbackName = asList(options.forceTriggeredScanners).find(
+        (entry) => normalizeScannerName(entry) === normalizedName
+      ) || normalizedName;
+      addStatus(fallbackName, undefined, undefined, false, { forceTriggered: true, hideScore: hideScore.has(normalizedName) });
+    }
+  }
+
   return Array.from(scannerMap.entries())
     .sort(([, a], [, b]) => a.name.localeCompare(b.name))
     .map(([, scanner]) => ({
       ...scanner,
-      scoreLabel: formatNumber(scanner.score),
-      thresholdLabel: formatNumber(scanner.threshold)
+      scoreLabel: scanner.hideScore ? '—' : formatNumber(scanner.score),
+      thresholdLabel: scanner.hideScore ? '—' : formatNumber(scanner.threshold)
     }));
 }
 
@@ -764,7 +789,20 @@ async function sendAnalyzeRequest(endpoint, textValue, resultElement) {
     const mode = endpoint.toLowerCase().includes('/analyze/output') ? 'output' : 'prompt';
     data.response = normalizeResponsePayload(data.response);
     const configuredScanners = mode === 'output' ? cachedOutputScanners : cachedPromptScanners;
-    const scannerStatuses = collectScannerStatuses(data.response, mode, configuredScanners);
+    const scannerStatuses = collectScannerStatuses(data.response, mode, configuredScanners, {
+      forceTriggeredScanners: mode === 'output' && String(textValue ?? '') !== String(firstDefined(
+        data.response?.sanitized_output,
+        data.response?.output_sanitized,
+        data.response?.output,
+        textValue
+      )) ? ['Deanonymize'] : [],
+      noScoreScanners: mode === 'output' && String(textValue ?? '') !== String(firstDefined(
+        data.response?.sanitized_output,
+        data.response?.output_sanitized,
+        data.response?.output,
+        textValue
+      )) ? ['Deanonymize'] : []
+    });
 
     if (mode === 'output') {
       applyScannerHighlights(new Set(), buildTriggeredSet(scannerStatuses));
