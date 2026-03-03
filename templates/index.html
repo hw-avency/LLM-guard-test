@@ -10,9 +10,13 @@
     h1 { margin-top: 0; }
     .card { border: 1px solid #6664; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; }
     .row { display: grid; gap: .75rem; }
+    .inline { display: flex; gap: .5rem; flex-wrap: wrap; }
     input, select, textarea, button { font: inherit; padding: .6rem .75rem; border-radius: .5rem; border: 1px solid #7775; width: 100%; box-sizing: border-box; }
     textarea { min-height: 160px; }
     button { cursor: pointer; font-weight: 600; }
+    .inline button { width: auto; }
+    .tab-button { opacity: .8; }
+    .tab-button.active { opacity: 1; border-color: #2e8b57; }
     pre { white-space: pre-wrap; word-break: break-word; background: #0001; border-radius: .5rem; padding: .75rem; }
     .muted { opacity: .8; }
     .ok { color: #2e8b57; }
@@ -47,17 +51,45 @@
     <pre id="result">Noch keine Anfrage gesendet.</pre>
   </div>
 
+  <div class="card">
+    <div class="inline" style="justify-content: space-between; align-items: center;">
+      <h2 style="margin: 0;">LLM Guard Konfiguration</h2>
+      <button id="toggleConfig" type="button">Konfiguration anzeigen</button>
+    </div>
+
+    <div id="configPanel" style="display: none; margin-top: .75rem;">
+      <div class="inline">
+        <button class="tab-button active" data-config-tab="root" type="button">GET /config/</button>
+        <button class="tab-button" data-config-tab="scanners" type="button">GET /config/scanners</button>
+        <button id="reloadConfig" type="button">Neu laden</button>
+      </div>
+      <pre id="configResult" style="margin-top: .75rem;">Noch nicht geladen.</pre>
+    </div>
+  </div>
+
 <script>
 const sendBtn = document.getElementById('send');
 const result = document.getElementById('result');
 const endpointSelect = document.getElementById('endpoint');
 const bodyInput = document.getElementById('body');
+const toggleConfigBtn = document.getElementById('toggleConfig');
+const configPanel = document.getElementById('configPanel');
+const configResult = document.getElementById('configResult');
+const reloadConfigBtn = document.getElementById('reloadConfig');
+const configTabButtons = Array.from(document.querySelectorAll('[data-config-tab]'));
 
 let endpointExamples = {
   '/analyze/prompt': {
     prompt: 'Hello from Cloud Run'
   }
 };
+
+const configRoutes = {
+  root: '/api/config',
+  scanners: '/api/config/scanners'
+};
+
+let activeConfigTab = 'root';
 
 function setBodyFromEndpoint(endpoint) {
   const example = endpointExamples[endpoint];
@@ -133,6 +165,44 @@ sendBtn.addEventListener('click', async () => {
 });
 
 loadEndpoints();
+
+function setActiveConfigTab(tabName) {
+  activeConfigTab = tabName;
+  for (const button of configTabButtons) {
+    button.classList.toggle('active', button.dataset.configTab === tabName);
+  }
+}
+
+async function loadConfig() {
+  configResult.textContent = 'Lade Konfiguration...';
+  try {
+    const route = configRoutes[activeConfigTab] || configRoutes.root;
+    const res = await fetch(route);
+    const data = await res.json();
+    configResult.textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    configResult.textContent = 'Fehler beim Laden der Konfiguration: ' + e.message;
+  }
+}
+
+toggleConfigBtn.addEventListener('click', async () => {
+  const isHidden = configPanel.style.display === 'none';
+  configPanel.style.display = isHidden ? 'block' : 'none';
+  toggleConfigBtn.textContent = isHidden ? 'Konfiguration ausblenden' : 'Konfiguration anzeigen';
+
+  if (isHidden && configResult.textContent.includes('Noch nicht geladen')) {
+    await loadConfig();
+  }
+});
+
+for (const button of configTabButtons) {
+  button.addEventListener('click', async () => {
+    setActiveConfigTab(button.dataset.configTab);
+    await loadConfig();
+  });
+}
+
+reloadConfigBtn.addEventListener('click', loadConfig);
 </script>
 </body>
 </html>
