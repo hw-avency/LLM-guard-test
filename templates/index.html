@@ -12,7 +12,7 @@
     .row { display: grid; gap: .75rem; }
     .inline { display: flex; gap: .5rem; flex-wrap: wrap; }
     input, select, textarea, button { font: inherit; padding: .6rem .75rem; border-radius: .5rem; border: 1px solid #7775; width: 100%; box-sizing: border-box; }
-    textarea { min-height: 160px; }
+    textarea { min-height: 120px; }
     button { cursor: pointer; font-weight: 600; }
     .inline button { width: auto; }
     .tab-button { opacity: .8; }
@@ -21,6 +21,7 @@
     .muted { opacity: .8; }
     .ok { color: #2e8b57; }
     .warn { color: #cc7a00; }
+    details summary { cursor: pointer; font-weight: 600; }
   </style>
 </head>
 <body>
@@ -38,10 +39,11 @@
       <option value="/analyze/prompt">/analyze/prompt (Standard)</option>
     </select>
 
-    <label for="body">JSON Body</label>
-    <textarea id="body">{
-  "prompt": "Hello from Cloud Run"
-}</textarea>
+    <label for="prompt">Prompt</label>
+    <textarea id="prompt" placeholder="Gib hier deinen Prompt ein">Hello from Cloud Run</textarea>
+
+    <label for="output">Output (optional)</label>
+    <textarea id="output" placeholder="Optionaler Modell-Output für Output-Scanner"></textarea>
 
     <div class="row">
       <div>
@@ -52,7 +54,7 @@
         <label for="outputScannerSelect">Output-Scanner auswählen (optional)</label>
         <select id="outputScannerSelect" multiple size="6"></select>
       </div>
-      <small class="muted">Mit Strg/Cmd-Klick mehrere auswählen. Die Auswahl wird als <code>input_scanners</code> bzw. <code>output_scanners</code> im Request-Body übergeben.</small>
+      <small class="muted">Mit Strg/Cmd-Klick mehrere auswählen. Die Scanner werden im Hintergrund als Query-Parameter und JSON-Felder gesendet.</small>
     </div>
 
     <button id="send">Request senden</button>
@@ -61,6 +63,13 @@
   <div class="card">
     <h2>Antwort</h2>
     <pre id="result">Noch keine Anfrage gesendet.</pre>
+  </div>
+
+  <div class="card">
+    <details>
+      <summary>Debug (exakte API Request/Response)</summary>
+      <pre id="debugResult" style="margin-top:.75rem;">Noch keine Anfrage gesendet.</pre>
+    </details>
   </div>
 
   <div class="card">
@@ -81,8 +90,10 @@
 <script>
 const sendBtn = document.getElementById('send');
 const result = document.getElementById('result');
+const debugResult = document.getElementById('debugResult');
 const endpointSelect = document.getElementById('endpoint');
-const bodyInput = document.getElementById('body');
+const promptInput = document.getElementById('prompt');
+const outputInput = document.getElementById('output');
 const inputScannerSelect = document.getElementById('inputScannerSelect');
 const outputScannerSelect = document.getElementById('outputScannerSelect');
 const toggleConfigBtn = document.getElementById('toggleConfig');
@@ -91,9 +102,10 @@ const configResult = document.getElementById('configResult');
 const reloadConfigBtn = document.getElementById('reloadConfig');
 const configTabButtons = Array.from(document.querySelectorAll('[data-config-tab]'));
 
-let endpointExamples = {
+const endpointExamples = {
   '/analyze/prompt': {
-    prompt: 'Hello from Cloud Run'
+    prompt: 'Hello from Cloud Run',
+    output: ''
   }
 };
 
@@ -103,12 +115,11 @@ const configRoutes = {
 
 let activeConfigTab = 'scanners';
 
-function setBodyFromEndpoint(endpoint) {
+function setFieldsFromEndpoint(endpoint) {
   const example = endpointExamples[endpoint];
-  if (!example) {
-    return;
-  }
-  bodyInput.value = JSON.stringify(example, null, 2);
+  if (!example) return;
+  promptInput.value = typeof example.prompt === 'string' ? example.prompt : '';
+  outputInput.value = typeof example.output === 'string' ? example.output : '';
 }
 
 async function loadEndpoints() {
@@ -121,10 +132,7 @@ async function loadEndpoints() {
 
     const data = await res.json();
     const endpoints = Array.isArray(data.endpoints) ? data.endpoints : [];
-
-    if (endpoints.length === 0) {
-      return;
-    }
+    if (endpoints.length === 0) return;
 
     endpointSelect.innerHTML = '';
 
@@ -136,10 +144,13 @@ async function loadEndpoints() {
         : endpoint.path;
       endpointSelect.appendChild(option);
 
-      endpointExamples[endpoint.path] = endpoint.example_body || {};
+      endpointExamples[endpoint.path] = {
+        prompt: endpoint.example_body?.prompt || '',
+        output: endpoint.example_body?.output || ''
+      };
     }
 
-    setBodyFromEndpoint(endpointSelect.value);
+    setFieldsFromEndpoint(endpointSelect.value);
   } catch (e) {
     result.textContent = 'Hinweis: ' + e.message;
   }
@@ -187,19 +198,11 @@ async function loadScanners() {
 }
 
 endpointSelect.addEventListener('change', (event) => {
-  setBodyFromEndpoint(event.target.value);
+  setFieldsFromEndpoint(event.target.value);
 });
 
 sendBtn.addEventListener('click', async () => {
   const endpoint = endpointSelect.value.trim();
-  let body;
-
-  try {
-    body = JSON.parse(bodyInput.value);
-  } catch (e) {
-    result.textContent = 'Ungültiges JSON im Body: ' + e.message;
-    return;
-  }
 
   const selectedInputScanners = Array.from(inputScannerSelect.selectedOptions)
     .map((option) => option.value)
@@ -208,27 +211,33 @@ sendBtn.addEventListener('click', async () => {
     .map((option) => option.value)
     .filter((value) => Boolean(value));
 
-  if (selectedInputScanners.length > 0) body.input_scanners = selectedInputScanners;
-  else delete body.input_scanners;
-
-  if (selectedOutputScanners.length > 0) body.output_scanners = selectedOutputScanners;
-  else delete body.output_scanners;
-
-  delete body.scanners;
+  const payload = {
+    endpoint,
+    prompt: promptInput.value,
+    output: outputInput.value,
+    input_scanners: selectedInputScanners,
+    output_scanners: selectedOutputScanners
+  };
 
   result.textContent = 'Sende Anfrage...';
+  debugResult.textContent = 'Sende Anfrage...';
 
   try {
     const res = await fetch('/api/forward', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ endpoint, body })
+      body: JSON.stringify(payload)
     });
 
     const data = await res.json();
+    const debug = data.debug || {};
+    delete data.debug;
+
     result.textContent = JSON.stringify(data, null, 2);
+    debugResult.textContent = JSON.stringify(debug, null, 2);
   } catch (e) {
     result.textContent = 'Fehler: ' + e.message;
+    debugResult.textContent = 'Fehler: ' + e.message;
   }
 });
 
