@@ -39,6 +39,16 @@
     .dual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
     .scanner-list { margin: 0; padding-left: 1.1rem; }
     .scanner-list li { margin: .2rem 0; }
+    .scanner-list li.scanner-hit {
+      color: #ffd3d3;
+      background: color-mix(in srgb, #d23f3f 22%, transparent);
+      border: 1px solid #d23f3f80;
+      border-radius: .35rem;
+      padding: .15rem .35rem;
+      list-style-position: inside;
+      font-weight: 700;
+      box-shadow: 0 0 .55rem color-mix(in srgb, #d23f3f 45%, transparent);
+    }
     @media (max-width: 800px) {
       .dual-grid { grid-template-columns: 1fr; }
       .compare-columns { grid-template-columns: 1fr; }
@@ -129,6 +139,8 @@ const configRoutes = {
 };
 
 let activeConfigTab = 'scanners';
+let cachedPromptScanners = [];
+let cachedOutputScanners = [];
 
 function firstDefined(...values) {
   for (const value of values) {
@@ -336,7 +348,78 @@ function formatResultView(data, debug) {
   `;
 }
 
-function renderScannerList(element, scanners) {
+function normalizeScannerName(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function scannerTriggered(scanner) {
+  if (!scanner || typeof scanner !== 'object') return false;
+
+  const explicitDetected = firstDefined(
+    scanner.detected,
+    scanner.matched,
+    scanner.match,
+    scanner.has_issue,
+    scanner.flagged,
+    scanner.triggered
+  );
+
+  if (explicitDetected === true) return true;
+
+  const validState = firstDefined(scanner.is_valid, scanner.valid, scanner.allowed);
+  if (validState === false) return true;
+
+  const score = Number(firstDefined(scanner.score, scanner.value, scanner.probability));
+  const threshold = Number(firstDefined(
+    scanner.threshold,
+    scanner.configured_threshold,
+    scanner.current_threshold,
+    scanner.threshold_current,
+    scanner.config?.threshold
+  ));
+
+  if (!Number.isNaN(score) && !Number.isNaN(threshold) && score >= threshold) return true;
+  return false;
+}
+
+function collectTriggeredScanners(responsePayload) {
+  const response = responsePayload || {};
+  const triggeredInput = new Set();
+  const triggeredOutput = new Set();
+
+  const scannerSources = [
+    { list: asList(response?.input_scanners), target: 'input' },
+    { list: asList(response?.output_scanners), target: 'output' },
+    { list: asList(response?.scanners), target: 'unknown' }
+  ];
+
+  for (const source of scannerSources) {
+    for (const scanner of source.list) {
+      if (!scanner || typeof scanner !== 'object') continue;
+
+      const name = firstDefined(scanner.name, scanner.scanner, scanner.type);
+      if (!name) continue;
+
+      if (!scannerTriggered(scanner)) continue;
+
+      const normalized = normalizeScannerName(name);
+      const target = String(firstDefined(scanner.target, scanner.stage, source.target)).toLowerCase();
+
+      if (target.includes('output')) {
+        triggeredOutput.add(normalized);
+      } else if (target.includes('input') || target.includes('prompt')) {
+        triggeredInput.add(normalized);
+      } else {
+        triggeredInput.add(normalized);
+        triggeredOutput.add(normalized);
+      }
+    }
+  }
+
+  return { triggeredInput, triggeredOutput };
+}
+
+function renderScannerList(element, scanners, triggeredSet = new Set()) {
   const names = Array.isArray(scanners) ? scanners : [];
   if (names.length === 0) {
     element.innerHTML = '<li class="muted">Keine aktiven Scanner gefunden.</li>';
@@ -344,8 +427,18 @@ function renderScannerList(element, scanners) {
   }
 
   element.innerHTML = names
-    .map((name) => `<li><code>${escapeHtml(name)}</code></li>`)
+    .map((name) => {
+      const isTriggered = triggeredSet.has(normalizeScannerName(name));
+      const cssClass = isTriggered ? 'scanner-hit' : '';
+      const marker = isTriggered ? ' 🔴' : '';
+      return `<li class="${cssClass}"><code>${escapeHtml(name)}</code>${marker}</li>`;
+    })
     .join('');
+}
+
+function applyScannerHighlights(triggeredInput = new Set(), triggeredOutput = new Set()) {
+  renderScannerList(promptScannersList, cachedPromptScanners, triggeredInput);
+  renderScannerList(outputScannersList, cachedOutputScanners, triggeredOutput);
 }
 
 async function loadActiveScanners() {
@@ -357,8 +450,9 @@ async function loadActiveScanners() {
     }
 
     const data = await res.json();
-    renderScannerList(promptScannersList, data.input_scanners);
-    renderScannerList(outputScannersList, data.output_scanners);
+    cachedPromptScanners = asList(data.input_scanners);
+    cachedOutputScanners = asList(data.output_scanners);
+    applyScannerHighlights();
   } catch (e) {
     promptScannersList.innerHTML = `<li class="warn">${escapeHtml(e.message)}</li>`;
     outputScannersList.innerHTML = `<li class="warn">${escapeHtml(e.message)}</li>`;
@@ -384,6 +478,9 @@ async function sendAnalyzeRequest(endpoint, textValue) {
     const data = await res.json();
     const debug = data.debug || {};
     delete data.debug;
+
+    const scannerHits = collectTriggeredScanners(data.response);
+    applyScannerHighlights(scannerHits.triggeredInput, scannerHits.triggeredOutput);
 
     result.innerHTML = formatResultView(data, debug);
     debugResult.textContent = JSON.stringify(debug, null, 2);
