@@ -180,7 +180,12 @@ def load_available_endpoints() -> Tuple[List[Dict[str, Any]], str]:
     return endpoints, ""
 
 
-def forward_to_upstream(endpoint: str, body: Dict[str, Any]) -> Tuple[Any, int]:
+def forward_to_upstream(
+    endpoint: str,
+    body: Dict[str, Any],
+    input_scanners: Optional[List[str]] = None,
+    output_scanners: Optional[List[str]] = None,
+) -> Tuple[Any, int]:
     config = get_config()
     if not config["api_url"]:
         return jsonify({"error": "API_URL ist nicht gesetzt."}), 500
@@ -204,8 +209,49 @@ def forward_to_upstream(endpoint: str, body: Dict[str, Any]) -> Tuple[Any, int]:
         "Content-Type": "application/json",
     }
 
+    input_scanners = [scanner for scanner in (input_scanners or []) if isinstance(scanner, str) and scanner.strip()]
+    output_scanners = [scanner for scanner in (output_scanners or []) if isinstance(scanner, str) and scanner.strip()]
+
+    if input_scanners:
+        body["input_scanners"] = input_scanners
+    else:
+        body.pop("input_scanners", None)
+
+    if output_scanners:
+        body["output_scanners"] = output_scanners
+    else:
+        body.pop("output_scanners", None)
+
+    if input_scanners or output_scanners:
+        body["scanners"] = {
+            "input": input_scanners,
+            "output": output_scanners,
+        }
+    else:
+        body.pop("scanners", None)
+
+    query_params: List[Tuple[str, str]] = []
+    for scanner in input_scanners:
+        query_params.append(("input_scanners", scanner))
+    for scanner in output_scanners:
+        query_params.append(("output_scanners", scanner))
+
+    prepared_request = requests.Request(
+        "POST",
+        target_url,
+        headers=headers,
+        json=body,
+        params=query_params or None,
+    ).prepare()
+
     try:
-        response = requests.post(target_url, headers=headers, json=body, timeout=timeout_seconds)
+        response = requests.post(
+            target_url,
+            headers=headers,
+            json=body,
+            params=query_params or None,
+            timeout=timeout_seconds,
+        )
     except requests.RequestException as exc:
         return jsonify({"error": "Anfrage an LLM Guard fehlgeschlagen.", "detail": str(exc)}), 502
 
@@ -223,6 +269,19 @@ def forward_to_upstream(endpoint: str, body: Dict[str, Any]) -> Tuple[Any, int]:
             "status_code": response.status_code,
             "target_url": target_url,
             "response": data,
+            "debug": {
+                "request": {
+                    "method": "POST",
+                    "url": prepared_request.url,
+                    "headers": dict(prepared_request.headers),
+                    "json_body": body,
+                },
+                "response": {
+                    "status_code": response.status_code,
+                    "headers": dict(response.headers),
+                    "text": response.text,
+                },
+            },
         }
     ), response.status_code
 
@@ -348,12 +407,32 @@ def index() -> str:
 def forward_request() -> Any:
     payload = request.get_json(silent=True) or {}
     endpoint = str(payload.get("endpoint", "/analyze/prompt")).strip()
-    body = payload.get("body", {})
 
-    if not isinstance(body, dict):
+    body_payload = payload.get("body")
+    if body_payload is None:
+        prompt = payload.get("prompt", "")
+        output = payload.get("output", "")
+        body: Dict[str, Any] = {
+            "prompt": prompt if isinstance(prompt, str) else str(prompt),
+            "output": output if isinstance(output, str) else str(output),
+        }
+    elif isinstance(body_payload, dict):
+        body = dict(body_payload)
+    else:
         return jsonify({"error": "body muss ein JSON-Objekt sein."}), 400
 
-    return forward_to_upstream(endpoint=endpoint, body=body)
+    input_scanners_raw = payload.get("input_scanners", [])
+    output_scanners_raw = payload.get("output_scanners", [])
+
+    input_scanners = input_scanners_raw if isinstance(input_scanners_raw, list) else []
+    output_scanners = output_scanners_raw if isinstance(output_scanners_raw, list) else []
+
+    return forward_to_upstream(
+        endpoint=endpoint,
+        body=body,
+        input_scanners=input_scanners,
+        output_scanners=output_scanners,
+    )
 
 
 @app.get("/api/endpoints")
