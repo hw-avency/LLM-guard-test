@@ -19,15 +19,16 @@
     .tab-button { opacity: .8; }
     .tab-button.active { opacity: 1; border-color: #2e8b57; }
     pre { white-space: pre-wrap; word-break: break-word; background: #0001; border-radius: .45rem; padding: .45rem .55rem; margin: .2rem 0 0; max-height: 240px; overflow: auto; }
+    .response-panel { white-space: normal; word-break: break-word; background: #0001; border-radius: .45rem; padding: .45rem .55rem; margin: .2rem 0 0; }
     .muted { opacity: .8; }
     .ok { color: #2e8b57; }
     .warn { color: #cc7a00; }
     .bad { color: #d23f3f; }
     details summary { cursor: pointer; font-weight: 600; }
     .result-grid { display: grid; gap: .4rem; }
-    .result-row { padding: .35rem .5rem; border: 1px solid #7775; border-radius: .4rem; background: #00000008; }
+    .result-row { padding: .28rem .45rem; border: 1px solid #7775; border-radius: .4rem; background: #00000008; }
     .result-row strong { display: inline-block; min-width: 220px; }
-    .scanner-status-row { display: flex; justify-content: space-between; align-items: baseline; gap: .75rem; flex-wrap: wrap; }
+    .scanner-status-row { display: flex; justify-content: space-between; align-items: center; gap: .4rem .75rem; flex-wrap: wrap; }
     .scanner-status-line { white-space: nowrap; }
     .compare-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; margin-top: .3rem; }
     .compare-column { border: 1px solid #7775; border-radius: .4rem; padding: .35rem .45rem; background: #00000008; }
@@ -42,9 +43,9 @@
     .dual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
     .column-stack { align-content: start; }
     .column-stack pre { min-height: 150px; max-height: 210px; }
-    .scanner-panel { max-height: 92px; overflow-y: auto; border: 1px solid #7775; border-radius: .4rem; padding: 2px 6px; background: #00000008; }
-    .scanner-list { margin: 2px 0; padding-left: .9rem; }
-    .scanner-list li { margin: 0; }
+    .scanner-panel { max-height: 70px; overflow-y: auto; border: 1px solid #7775; border-radius: .4rem; padding: 2px 6px; background: #00000008; }
+    .scanner-list { margin: 1px 0; padding-left: .9rem; }
+    .scanner-list li { margin: 0; line-height: 1.2; }
     .scanner-list li { display: flex; align-items: center; gap: .4rem; }
     .scanner-list li.hit { background: #ffd7d766; border-radius: .25rem; }
     .scanner-list li.hit code { color: #b22f2f; font-weight: 700; }
@@ -74,7 +75,7 @@
         <button id="sendPrompt" type="button">Prompt abschicken</button>
         <div>
           <strong>Prompt-Antwort:</strong>
-          <pre id="promptResult">Noch keine Prompt-Anfrage gesendet.</pre>
+          <div id="promptResult" class="response-panel">Noch keine Prompt-Anfrage gesendet.</div>
         </div>
       </div>
 
@@ -90,7 +91,7 @@
         <button id="sendOutput" type="button">Output abschicken</button>
         <div>
           <strong>Output-Antwort:</strong>
-          <pre id="outputResult">Noch keine Output-Anfrage gesendet.</pre>
+          <div id="outputResult" class="response-panel">Noch keine Output-Anfrage gesendet.</div>
         </div>
       </div>
     </div>
