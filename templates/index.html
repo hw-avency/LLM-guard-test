@@ -51,11 +51,8 @@
       <option value="/analyze/prompt">/analyze/prompt (Standard)</option>
     </select>
 
-    <label for="prompt">Prompt</label>
-    <textarea id="prompt" placeholder="Gib hier deinen Prompt ein">Hello from Cloud Run</textarea>
-
-    <label for="output">Output (optional)</label>
-    <textarea id="output" placeholder="Optionaler Modell-Output für Output-Scanner"></textarea>
+    <label for="textInput" id="textInputLabel">Prompt oder Answer</label>
+    <textarea id="textInput" placeholder="Gib hier den zu prüfenden Text ein">Hello from Cloud Run</textarea>
 
     <button id="send">Request senden</button>
   </div>
@@ -92,8 +89,8 @@ const sendBtn = document.getElementById('send');
 const result = document.getElementById('result');
 const debugResult = document.getElementById('debugResult');
 const endpointSelect = document.getElementById('endpoint');
-const promptInput = document.getElementById('prompt');
-const outputInput = document.getElementById('output');
+const textInput = document.getElementById('textInput');
+const textInputLabel = document.getElementById('textInputLabel');
 const toggleConfigBtn = document.getElementById('toggleConfig');
 const configPanel = document.getElementById('configPanel');
 const configResult = document.getElementById('configResult');
@@ -102,10 +99,25 @@ const configTabButtons = Array.from(document.querySelectorAll('[data-config-tab]
 
 const endpointExamples = {
   '/analyze/prompt': {
-    prompt: 'Hello from Cloud Run',
-    output: ''
+    text: 'Hello from Cloud Run'
   }
 };
+
+function inferBodyKey(endpoint) {
+  return String(endpoint || '').toLowerCase().startsWith('/analyze/output') ? 'output' : 'prompt';
+}
+
+function updateTextFieldUi(endpoint) {
+  const bodyKey = inferBodyKey(endpoint);
+  if (bodyKey === 'output') {
+    textInputLabel.textContent = 'Answer';
+    textInput.placeholder = 'Gib hier den Answer/Output ein';
+    return;
+  }
+
+  textInputLabel.textContent = 'Prompt';
+  textInput.placeholder = 'Gib hier den Prompt ein';
+}
 
 const configRoutes = {
   scanners: '/api/config/scanners'
@@ -115,9 +127,9 @@ let activeConfigTab = 'scanners';
 
 function setFieldsFromEndpoint(endpoint) {
   const example = endpointExamples[endpoint];
+  updateTextFieldUi(endpoint);
   if (!example) return;
-  promptInput.value = typeof example.prompt === 'string' ? example.prompt : '';
-  outputInput.value = typeof example.output === 'string' ? example.output : '';
+  textInput.value = typeof example.text === 'string' ? example.text : '';
 }
 
 function firstDefined(...values) {
@@ -337,8 +349,7 @@ async function loadEndpoints() {
       endpointSelect.appendChild(option);
 
       endpointExamples[endpoint.path] = {
-        prompt: endpoint.example_body?.prompt || '',
-        output: endpoint.example_body?.output || ''
+        text: endpoint.example_body?.prompt || endpoint.example_body?.output || ''
       };
     }
 
@@ -357,8 +368,7 @@ sendBtn.addEventListener('click', async () => {
 
   const payload = {
     endpoint,
-    prompt: promptInput.value,
-    output: outputInput.value
+    text: textInput.value
   };
 
   result.textContent = 'Sende Anfrage...';

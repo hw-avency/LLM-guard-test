@@ -407,12 +407,23 @@ def forward_request() -> Any:
 
     body_payload = payload.get("body")
     if body_payload is None:
+        text = payload.get("text", "")
+        normalized_text = text if isinstance(text, str) else str(text)
+
         prompt = payload.get("prompt", "")
         output = payload.get("output", "")
+
+        body_key = "output" if endpoint.lower().startswith("/analyze/output") else "prompt"
         body: Dict[str, Any] = {
-            "prompt": prompt if isinstance(prompt, str) else str(prompt),
-            "output": output if isinstance(output, str) else str(output),
+            "prompt": "",
+            "output": "",
         }
+
+        if payload.get("text") is not None:
+            body[body_key] = normalized_text
+        else:
+            body["prompt"] = prompt if isinstance(prompt, str) else str(prompt)
+            body["output"] = output if isinstance(output, str) else str(output)
     elif isinstance(body_payload, dict):
         body = dict(body_payload)
     else:
