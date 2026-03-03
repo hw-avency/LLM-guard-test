@@ -250,8 +250,9 @@ function formatHighlightedText(originalText, sanitizedText) {
 function formatResultView(data, debug, durationMs, mode) {
   const response = data?.response || {};
   const requestBody = debug?.request?.json_body || {};
+  const configuredScanners = mode === 'output' ? cachedOutputScanners : cachedPromptScanners;
 
-  const scannerStatuses = collectScannerStatuses(response, mode);
+  const scannerStatuses = collectScannerStatuses(response, mode, configuredScanners);
   const sanitizedPrompt = firstDefined(
     response?.sanitized_prompt,
     response?.prompt_sanitized,
@@ -271,10 +272,6 @@ function formatResultView(data, debug, durationMs, mode) {
   const promptCriticalSection = `
       <div class="result-row">
         <strong>Kritische Stellen im Prompt</strong>
-        <div class="legend">
-          <span class="legend-item"><span class="legend-swatch legend-swatch-critical"></span> Kritisch erkannt (im Original entfernt/geändert)</span>
-          <span class="legend-item"><span class="legend-swatch legend-swatch-inserted"></span> Durch Sanitizing ergänzt/ersetzt</span>
-        </div>
         <div class="compare-columns">
           <div class="compare-column">
             <div><small class="muted">Original</small></div>
@@ -290,10 +287,6 @@ function formatResultView(data, debug, durationMs, mode) {
   const outputCriticalSection = `
       <div class="result-row">
         <strong>Kritische Stellen im Output</strong>
-        <div class="legend">
-          <span class="legend-item"><span class="legend-swatch legend-swatch-critical"></span> Kritisch erkannt (im Original entfernt/geändert)</span>
-          <span class="legend-item"><span class="legend-swatch legend-swatch-inserted"></span> Durch Sanitizing ergänzt/ersetzt</span>
-        </div>
         <div class="compare-columns">
           <div class="compare-column">
             <div><small class="muted">Original</small></div>
@@ -329,7 +322,7 @@ function formatResultView(data, debug, durationMs, mode) {
   `;
 }
 
-function collectScannerStatuses(responsePayload, mode) {
+function collectScannerStatuses(responsePayload, mode, configuredScanners = []) {
   const response = responsePayload || {};
   const scannerMap = new Map();
   const thresholdMap = mode === 'output' ? scannerThresholds.output : scannerThresholds.input;
@@ -358,15 +351,22 @@ function collectScannerStatuses(responsePayload, mode) {
     if (!normalizedName) return;
 
     const current = scannerMap.get(normalizedName) || { name: name.trim() };
+    const resolvedScore = score ?? current.score;
     const resolvedThreshold = threshold ?? thresholdMap.get(normalizedName);
-    const triggered = evaluateScanner(score, resolvedThreshold, state);
+    const resolvedState = state ?? current.status;
+    const triggered = evaluateScanner(resolvedScore, resolvedThreshold, resolvedState);
     scannerMap.set(normalizedName, {
       name: current.name || name.trim(),
-      score,
+      score: resolvedScore,
       threshold: resolvedThreshold,
-      status: state,
+      status: resolvedState,
       triggered
     });
+  }
+
+  for (const scannerName of configuredScanners) {
+    if (typeof scannerName !== 'string' || !scannerName.trim()) continue;
+    addStatus(scannerName, undefined, thresholdMap.get(normalizeScannerName(scannerName)), undefined);
   }
 
   function collectFromContainer(container, fallbackTarget) {
@@ -374,8 +374,15 @@ function collectScannerStatuses(responsePayload, mode) {
 
     for (const [key, value] of Object.entries(container)) {
       if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
-      const validState = firstDefined(value.is_valid, value.valid, value.allowed);
-      const score = parseNumber(firstDefined(value.score, value.value, value.probability));
+      const validState = firstDefined(value.is_valid, value.valid, value.allowed, value.passed);
+      const score = parseNumber(firstDefined(
+        value.score,
+        value.value,
+        value.probability,
+        value.risk,
+        value.risk_score,
+        value.confidence
+      ));
       const threshold = parseNumber(firstDefined(
         value.threshold,
         value.configured_threshold,
@@ -384,14 +391,15 @@ function collectScannerStatuses(responsePayload, mode) {
         value.config?.threshold
       ));
 
+      const scannerName = firstDefined(value.name, value.scanner, value.type, value.id, key);
       if (validState === true || validState === false || score !== undefined || threshold !== undefined) {
-        addStatus(key, score, threshold, validState);
+        addStatus(scannerName, score, threshold, validState);
       }
 
       const nestedTarget = value.target || value.mode || fallbackTarget;
       if (nestedTarget && typeof nestedTarget === 'string') {
         const targetKey = nestedTarget.toLowerCase();
-        if (targetKey.includes('output')) addStatus(key, score, threshold, validState);
+        if (targetKey.includes('output')) addStatus(scannerName, score, threshold, validState);
       }
     }
   }
@@ -419,8 +427,15 @@ function collectScannerStatuses(responsePayload, mode) {
       return;
     }
 
-    const ownState = firstDefined(node.is_valid, node.valid, node.allowed);
-    const ownScore = parseNumber(firstDefined(node.score, node.value, node.probability));
+    const ownState = firstDefined(node.is_valid, node.valid, node.allowed, node.passed);
+    const ownScore = parseNumber(firstDefined(
+      node.score,
+      node.value,
+      node.probability,
+      node.risk,
+      node.risk_score,
+      node.confidence
+    ));
     const ownThreshold = parseNumber(firstDefined(
       node.threshold,
       node.configured_threshold,
@@ -428,7 +443,7 @@ function collectScannerStatuses(responsePayload, mode) {
       node.threshold_current,
       node.config?.threshold
     ));
-    const ownName = firstDefined(node.scanner, node.name, node.type, keyHint);
+    const ownName = firstDefined(node.scanner, node.name, node.type, node.id, keyHint);
     if ((ownState === true || ownState === false) && typeof ownName === 'string') {
       addStatus(ownName, ownScore, ownThreshold, ownState);
     } else if ((ownScore !== undefined || ownThreshold !== undefined) && typeof ownName === 'string') {
@@ -475,7 +490,14 @@ function scannerTriggered(scanner, configuredThreshold) {
   const validState = firstDefined(scanner.is_valid, scanner.valid, scanner.allowed);
   if (validState === false) return true;
 
-  const score = Number(firstDefined(scanner.score, scanner.value, scanner.probability));
+  const score = Number(firstDefined(
+    scanner.score,
+    scanner.value,
+    scanner.probability,
+    scanner.risk,
+    scanner.risk_score,
+    scanner.confidence
+  ));
   const threshold = Number(firstDefined(
     scanner.threshold,
     scanner.configured_threshold,
@@ -519,7 +541,7 @@ function collectTriggeredScanners(responsePayload, mode, debugPayload = {}) {
 
   function looksLikeScannerResult(candidate) {
     if (!candidate || typeof candidate !== 'object') return false;
-    return ['score', 'threshold', 'is_valid', 'valid', 'allowed', 'detected', 'triggered'].some((key) => key in candidate);
+    return ['score', 'risk', 'risk_score', 'threshold', 'is_valid', 'valid', 'allowed', 'detected', 'triggered'].some((key) => key in candidate);
   }
 
   function walk(value, keyHint = '', targetHint = '') {
@@ -534,6 +556,7 @@ function collectTriggeredScanners(responsePayload, mode, debugPayload = {}) {
       value.name,
       value.scanner,
       value.type,
+      value.id,
       keyHint && keyHint.toLowerCase().includes('scanner') ? keyHint : undefined,
       looksLikeScannerResult(value) ? keyHint : undefined
     );
