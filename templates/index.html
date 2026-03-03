@@ -43,6 +43,12 @@
   "prompt": "Hello from Cloud Run"
 }</textarea>
 
+    <div>
+      <label for="scannerSelect">Scanner auswählen (optional)</label>
+      <select id="scannerSelect" multiple size="8"></select>
+      <small class="muted">Mit Strg/Cmd-Klick mehrere auswählen. Die Auswahl wird als <code>scanners</code> im Request-Body übergeben.</small>
+    </div>
+
     <button id="send">Request senden</button>
   </div>
 
@@ -72,6 +78,7 @@ const sendBtn = document.getElementById('send');
 const result = document.getElementById('result');
 const endpointSelect = document.getElementById('endpoint');
 const bodyInput = document.getElementById('body');
+const scannerSelect = document.getElementById('scannerSelect');
 const toggleConfigBtn = document.getElementById('toggleConfig');
 const configPanel = document.getElementById('configPanel');
 const configResult = document.getElementById('configResult');
@@ -133,6 +140,39 @@ async function loadEndpoints() {
   }
 }
 
+async function loadScanners() {
+  scannerSelect.innerHTML = '';
+  try {
+    const res = await fetch('/api/scanners/available');
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Scanner konnten nicht geladen werden.');
+    }
+
+    const scanners = Array.isArray(data.scanners) ? data.scanners : [];
+    if (scanners.length === 0) {
+      const option = document.createElement('option');
+      option.disabled = true;
+      option.textContent = 'Keine Scanner gefunden';
+      scannerSelect.appendChild(option);
+      return;
+    }
+
+    for (const scanner of scanners) {
+      const option = document.createElement('option');
+      option.value = scanner;
+      option.textContent = scanner;
+      scannerSelect.appendChild(option);
+    }
+  } catch (e) {
+    const option = document.createElement('option');
+    option.disabled = true;
+    option.textContent = 'Fehler: ' + e.message;
+    scannerSelect.appendChild(option);
+  }
+}
+
 endpointSelect.addEventListener('change', (event) => {
   setBodyFromEndpoint(event.target.value);
 });
@@ -146,6 +186,16 @@ sendBtn.addEventListener('click', async () => {
   } catch (e) {
     result.textContent = 'Ungültiges JSON im Body: ' + e.message;
     return;
+  }
+
+  const selectedScanners = Array.from(scannerSelect.selectedOptions)
+    .map((option) => option.value)
+    .filter((value) => Boolean(value));
+
+  if (selectedScanners.length > 0) {
+    body.scanners = selectedScanners;
+  } else if (body.scanners) {
+    delete body.scanners;
   }
 
   result.textContent = 'Sende Anfrage...';
@@ -165,6 +215,7 @@ sendBtn.addEventListener('click', async () => {
 });
 
 loadEndpoints();
+loadScanners();
 
 function setActiveConfigTab(tabName) {
   activeConfigTab = tabName;
