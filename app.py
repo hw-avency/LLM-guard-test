@@ -262,20 +262,20 @@ def get_upstream_config(endpoint: str) -> Tuple[Any, int]:
     return jsonify({"status_code": response.status_code, "target_url": target_url, "response": data}), response.status_code
 
 
-def load_scanner_names() -> Tuple[List[str], str]:
+def load_scanner_names() -> Tuple[Dict[str, List[str]], str]:
     config = get_config()
     if not config["api_url"]:
-        return [], "API_URL ist nicht gesetzt."
+        return {"input_scanners": [], "output_scanners": []}, "API_URL ist nicht gesetzt."
     if not config["auth_token"]:
-        return [], "AUTH_TOKEN ist nicht gesetzt."
+        return {"input_scanners": [], "output_scanners": []}, "AUTH_TOKEN ist nicht gesetzt."
 
     try:
         timeout_seconds = int(config["upstream_timeout_seconds"])
     except ValueError:
-        return [], "UPSTREAM_TIMEOUT_SECONDS muss eine Ganzzahl sein."
+        return {"input_scanners": [], "output_scanners": []}, "UPSTREAM_TIMEOUT_SECONDS muss eine Ganzzahl sein."
 
     if timeout_seconds <= 0:
-        return [], "UPSTREAM_TIMEOUT_SECONDS muss > 0 sein."
+        return {"input_scanners": [], "output_scanners": []}, "UPSTREAM_TIMEOUT_SECONDS muss > 0 sein."
 
     target_url = f"{config['api_url'].rstrip('/')}/debug/scanners"
     headers = {"Authorization": f"Bearer {config['auth_token']}"}
@@ -285,9 +285,9 @@ def load_scanner_names() -> Tuple[List[str], str]:
         response.raise_for_status()
         payload = response.json()
     except requests.RequestException as exc:
-        return [], f"Scanner-Konfiguration konnte nicht geladen werden: {exc}"
+        return {"input_scanners": [], "output_scanners": []}, f"Scanner-Konfiguration konnte nicht geladen werden: {exc}"
     except ValueError as exc:
-        return [], f"Scanner-Konfiguration ist kein gültiges JSON: {exc}"
+        return {"input_scanners": [], "output_scanners": []}, f"Scanner-Konfiguration ist kein gültiges JSON: {exc}"
 
     def extract_names(source: Any) -> List[str]:
         names: List[str] = []
@@ -314,16 +314,24 @@ def load_scanner_names() -> Tuple[List[str], str]:
 
         return names
 
-    scanner_names: List[str] = []
-    if isinstance(payload, dict) and isinstance(payload.get("response"), dict):
-        scanner_names.extend(extract_names(payload["response"]))
-    elif isinstance(payload, dict) and "scanners" in payload:
-        scanner_names.extend(extract_names(payload.get("scanners")))
-    else:
-        scanner_names.extend(extract_names(payload))
+    scanners: Dict[str, List[str]] = {"input_scanners": [], "output_scanners": []}
 
-    unique_sorted_names = sorted(set(scanner_names))
-    return unique_sorted_names, ""
+    response_payload: Any = payload
+    if isinstance(payload, dict) and isinstance(payload.get("response"), dict):
+        response_payload = payload["response"]
+
+    if isinstance(response_payload, dict):
+        scanners["input_scanners"] = sorted(set(extract_names(response_payload.get("input_scanners", []))))
+        scanners["output_scanners"] = sorted(set(extract_names(response_payload.get("output_scanners", []))))
+
+        if not scanners["input_scanners"] and not scanners["output_scanners"]:
+            scanners["input_scanners"] = sorted(
+                set(extract_names(response_payload.get("scanners", response_payload)))
+            )
+    else:
+        scanners["input_scanners"] = sorted(set(extract_names(response_payload)))
+
+    return scanners, ""
 
 
 @app.get("/")
@@ -371,7 +379,7 @@ def get_available_scanners() -> Any:
     scanners, error = load_scanner_names()
     if error:
         return jsonify({"error": error}), 502
-    return jsonify({"scanners": scanners})
+    return jsonify(scanners)
 
 
 @app.post("/analyze/prompt")
