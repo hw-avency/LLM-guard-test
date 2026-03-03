@@ -29,13 +29,13 @@
     .compare-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin-top: .45rem; }
     .compare-column { border: 1px solid #7775; border-radius: .45rem; padding: .5rem; background: #00000008; }
     .highlight-box { white-space: pre-wrap; word-break: break-word; line-height: 1.45; }
-    .critical-highlight { background: color-mix(in srgb, #d23f3f 30%, transparent); color: #ffb1b1; border-radius: .2rem; padding: 0 .1rem; }
-    .inserted-highlight { background: color-mix(in srgb, #2e8b57 25%, transparent); color: #b8f0cb; border-radius: .2rem; padding: 0 .1rem; }
+    .critical-highlight { background: #ffd7d7; color: #4a1010; border-radius: .2rem; padding: 0 .1rem; font-weight: 600; }
+    .inserted-highlight { background: #d9f5e6; color: #0f3d24; border-radius: .2rem; padding: 0 .1rem; font-weight: 600; }
     .legend { display: flex; flex-wrap: wrap; gap: .6rem; font-size: .92rem; margin-bottom: .4rem; }
     .legend-item { display: inline-flex; align-items: center; gap: .3rem; }
     .legend-swatch { width: .9rem; height: .9rem; border-radius: .2rem; display: inline-block; }
-    .legend-swatch-critical { background: color-mix(in srgb, #d23f3f 35%, transparent); border: 1px solid #d23f3f80; }
-    .legend-swatch-inserted { background: color-mix(in srgb, #2e8b57 25%, transparent); border: 1px solid #2e8b5780; }
+    .legend-swatch-critical { background: #ffd7d7; border: 1px solid #c44949; }
+    .legend-swatch-inserted { background: #d9f5e6; border: 1px solid #2e8b57; }
     .dual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
     .column-stack { align-content: start; }
     .column-stack pre { min-height: 220px; }
@@ -173,9 +173,20 @@ function formatStateLabel(value) {
   return '<span class="warn"><strong>Aktion nötig</strong></span>';
 }
 
-function formatOutputStateLabel(value, hasOutputScannerResult) {
-  if (!hasOutputScannerResult) return '<span class="muted"><strong>(nicht zutreffend)</strong></span>';
-  return formatStateLabel(value);
+function formatOutputReplacementState(rawOutput, sanitizedOutput, outputState) {
+  const original = String(rawOutput ?? '');
+  const sanitized = String(sanitizedOutput ?? '');
+  const changed = original !== sanitized;
+
+  if (changed) {
+    return '<span class="warn"><strong>Output wurde ersetzt/geändert</strong></span>';
+  }
+
+  if (outputState !== undefined) {
+    return formatStateLabel(outputState);
+  }
+
+  return '<span class="ok"><strong>Keine Änderungen am Output</strong></span>';
 }
 
 function tokenizeForDiff(value) {
@@ -259,7 +270,6 @@ function formatHighlightedText(originalText, sanitizedText) {
 
 function formatResultView(data, debug, durationMs, mode) {
   const response = data?.response || {};
-  const scanners = asList(response?.scanners);
   const requestBody = debug?.request?.json_body || {};
 
   const inputState = firstDefined(response?.is_valid, response?.allowed, response?.valid);
@@ -281,33 +291,6 @@ function formatResultView(data, debug, durationMs, mode) {
   const rawOutput = firstDefined(requestBody?.output, response?.output, '');
   const promptDiff = formatHighlightedText(rawPrompt, sanitizedPrompt);
   const outputDiff = formatHighlightedText(rawOutput, sanitizedOutput);
-
-  const thresholdSources = [
-    ...scanners,
-    ...asList(response?.input_scanners),
-    ...asList(response?.output_scanners)
-  ];
-  const scannerThresholdRows = thresholdSources.map((scanner) => {
-    if (!scanner || typeof scanner !== 'object') return '';
-    const name = firstDefined(scanner.scanner, scanner.name, scanner.type, 'Unbekannt');
-    const thresholdIs = firstDefined(
-      scanner.score,
-      scanner.value,
-      scanner.current_threshold,
-      scanner.threshold_current,
-      scanner.threshold,
-      scanner.threshold_is,
-      '—'
-    );
-    const thresholdConfigured = firstDefined(
-      scanner.configured_threshold,
-      scanner.threshold_configured,
-      scanner.config?.threshold,
-      scanner.threshold,
-      '—'
-    );
-    return `<div class="result-row"><strong>${escapeHtml(name)}</strong> Schwellwert IST: <code>${escapeHtml(thresholdIs)}</code> | Schwellwert Konfiguriert: <code>${escapeHtml(thresholdConfigured)}</code></div>`;
-  }).join('');
 
   const promptCriticalSection = `
       <div class="result-row">
@@ -353,12 +336,11 @@ function formatResultView(data, debug, durationMs, mode) {
     <div class="result-grid">
       <div class="result-row"><strong>Statuscode</strong> <code>${escapeHtml(data?.status_code ?? '—')}</code></div>
       <div class="result-row"><strong>Request-Dauer</strong> <code>${escapeHtml(durationMs ?? '—')} ms</code></div>
-      <div class="result-row"><strong>Input-Status</strong> ${formatStateLabel(inputState)}</div>
-      <div class="result-row"><strong>Output-Status</strong> ${formatOutputStateLabel(outputState, hasOutputScannerResult)}</div>
+      ${mode === 'prompt' ? `<div class="result-row"><strong>Input-Status</strong> ${formatStateLabel(inputState)}</div>` : ''}
+      ${mode === 'output' ? `<div class="result-row"><strong>Output-Status</strong> ${formatOutputReplacementState(rawOutput, sanitizedOutput, hasOutputScannerResult ? outputState : undefined)}</div>` : ''}
       <div class="result-row"><strong>Bereinigter Input</strong><br><code>${escapeHtml(sanitizedPrompt ?? '—')}</code></div>
       <div class="result-row"><strong>Bereinigter Output</strong><br><code>${escapeHtml(sanitizedOutput ?? '—')}</code></div>
       ${criticalSection}
-      <div class="result-row"><strong>Scanner-Details</strong>${scannerThresholdRows || ' Keine Scannerdetails in der Antwort vorhanden.'}</div>
     </div>
   `;
 }
@@ -405,58 +387,60 @@ function collectTriggeredScanners(responsePayload, mode) {
   const triggeredInput = new Set();
   const triggeredOutput = new Set();
 
-  const scannerSources = [];
+  function addTriggeredScanner(name, target) {
+    const normalized = normalizeScannerName(name);
+    if (!normalized) return;
 
-  function pushIfArray(list, target) {
-    if (Array.isArray(list) && list.length > 0) {
-      scannerSources.push({ list, target });
+    const targetString = String(target || '').toLowerCase();
+    if (targetString.includes('output')) {
+      triggeredOutput.add(normalized);
+      return;
+    }
+    if (targetString.includes('input') || targetString.includes('prompt')) {
+      triggeredInput.add(normalized);
+      return;
+    }
+    if (mode === 'output') {
+      triggeredOutput.add(normalized);
+    } else if (mode === 'prompt') {
+      triggeredInput.add(normalized);
+    } else {
+      triggeredInput.add(normalized);
+      triggeredOutput.add(normalized);
     }
   }
 
-  pushIfArray(response?.input_scanners, 'input');
-  pushIfArray(response?.output_scanners, 'output');
-  pushIfArray(response?.scanners, mode === 'prompt' ? 'input' : mode === 'output' ? 'output' : 'unknown');
+  function walk(value, keyHint = '', targetHint = '') {
+    if (Array.isArray(value)) {
+      for (const item of value) walk(item, keyHint, targetHint);
+      return;
+    }
 
-  for (const key of Object.keys(response)) {
-    const value = response[key];
-    if (!Array.isArray(value)) continue;
-    if (!key.toLowerCase().includes('scanner')) continue;
+    if (!value || typeof value !== 'object') return;
 
-    const loweredKey = key.toLowerCase();
-    const inferredTarget = loweredKey.includes('output')
-      ? 'output'
-      : loweredKey.includes('input') || loweredKey.includes('prompt')
-        ? 'input'
-        : mode === 'prompt'
+    const scannerName = firstDefined(
+      value.name,
+      value.scanner,
+      value.type,
+      keyHint && keyHint.toLowerCase().includes('scanner') ? keyHint : undefined
+    );
+    const target = firstDefined(value.target, value.stage, value.kind, targetHint);
+
+    if (scannerName && scannerTriggered(value)) {
+      addTriggeredScanner(scannerName, target);
+    }
+
+    for (const [nestedKey, nestedValue] of Object.entries(value)) {
+      const nestedTarget = nestedKey.toLowerCase().includes('output')
+        ? 'output'
+        : nestedKey.toLowerCase().includes('input') || nestedKey.toLowerCase().includes('prompt')
           ? 'input'
-          : mode === 'output'
-            ? 'output'
-            : 'unknown';
-    pushIfArray(value, inferredTarget);
-  }
-
-  for (const source of scannerSources) {
-    for (const scanner of source.list) {
-      if (!scanner || typeof scanner !== 'object') continue;
-
-      const name = firstDefined(scanner.name, scanner.scanner, scanner.type);
-      if (!name) continue;
-
-      if (!scannerTriggered(scanner)) continue;
-
-      const normalized = normalizeScannerName(name);
-      const target = String(firstDefined(scanner.target, scanner.stage, source.target)).toLowerCase();
-
-      if (target.includes('output')) {
-        triggeredOutput.add(normalized);
-      } else if (target.includes('input') || target.includes('prompt')) {
-        triggeredInput.add(normalized);
-      } else {
-        triggeredInput.add(normalized);
-        triggeredOutput.add(normalized);
-      }
+          : target;
+      walk(nestedValue, nestedKey, nestedTarget);
     }
   }
+
+  walk(response, '', mode);
 
   return { triggeredInput, triggeredOutput };
 }
@@ -481,6 +465,24 @@ function renderScannerList(element, scanners, triggeredSet = new Set()) {
 function applyScannerHighlights(triggeredInput = new Set(), triggeredOutput = new Set()) {
   renderScannerList(promptScannersList, cachedPromptScanners, triggeredInput);
   renderScannerList(outputScannersList, cachedOutputScanners, triggeredOutput);
+
+  const applyDomClass = (listElement, triggeredSet) => {
+    const items = listElement.querySelectorAll('li');
+    for (const item of items) {
+      const scannerName = item.textContent || '';
+      const isTriggered = triggeredSet.has(normalizeScannerName(scannerName));
+      item.classList.toggle('scanner-hit', isTriggered);
+      if (isTriggered && !item.textContent.includes('🔴')) {
+        item.textContent = `${scannerName.replace(' 🔴', '')} 🔴`;
+      }
+      if (!isTriggered) {
+        item.textContent = scannerName.replace(' 🔴', '');
+      }
+    }
+  };
+
+  applyDomClass(promptScannersList, triggeredInput);
+  applyDomClass(outputScannersList, triggeredOutput);
 }
 
 async function loadActiveScanners() {
