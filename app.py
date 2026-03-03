@@ -222,13 +222,10 @@ def forward_to_upstream(
     else:
         body.pop("output_scanners", None)
 
-    if input_scanners or output_scanners:
-        body["scanners"] = {
-            "input": input_scanners,
-            "output": output_scanners,
-        }
-    else:
-        body.pop("scanners", None)
+    # Einige Upstream-Versionen interpretieren ein leeres `scanners`-Objekt
+    # als "alle Scanner aktiv". Deshalb senden wir nur explizite
+    # input/output_scanners und kein zusätzliches Kombi-Feld.
+    body.pop("scanners", None)
 
     query_params: List[Tuple[str, str]] = []
     for scanner in input_scanners:

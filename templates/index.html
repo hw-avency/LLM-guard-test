@@ -21,7 +21,11 @@
     .muted { opacity: .8; }
     .ok { color: #2e8b57; }
     .warn { color: #cc7a00; }
+    .bad { color: #d23f3f; }
     details summary { cursor: pointer; font-weight: 600; }
+    .result-grid { display: grid; gap: .65rem; }
+    .result-row { padding: .5rem .65rem; border: 1px solid #7775; border-radius: .5rem; background: #00000008; }
+    .result-row strong { display: inline-block; min-width: 220px; }
   </style>
 </head>
 <body>
@@ -120,6 +124,73 @@ function setFieldsFromEndpoint(endpoint) {
   if (!example) return;
   promptInput.value = typeof example.prompt === 'string' ? example.prompt : '';
   outputInput.value = typeof example.output === 'string' ? example.output : '';
+}
+
+function firstDefined(...values) {
+  for (const value of values) {
+    if (value !== undefined && value !== null) return value;
+  }
+  return undefined;
+}
+
+function asList(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+function formatStateLabel(value) {
+  if (value === true) return '<span class="ok"><strong>Erlaubt</strong></span>';
+  if (value === false) return '<span class="bad"><strong>Nicht erlaubt / Aktion nötig</strong></span>';
+  return '<span class="warn"><strong>Aktion nötig</strong></span>';
+}
+
+function formatResultView(data, debug) {
+  const response = data?.response || {};
+  const scanners = asList(response?.scanners);
+  const requestBody = debug?.request?.json_body || {};
+
+  const inputState = firstDefined(response?.is_valid, response?.allowed, response?.valid);
+  const outputState = firstDefined(response?.output_valid, response?.is_output_valid);
+  const sanitizedPrompt = firstDefined(
+    response?.sanitized_prompt,
+    response?.prompt_sanitized,
+    response?.prompt
+  );
+  const sanitizedOutput = firstDefined(
+    response?.sanitized_output,
+    response?.output_sanitized,
+    response?.output
+  );
+
+  const scannerRequestInput = asList(requestBody?.input_scanners);
+  const scannerRequestOutput = asList(requestBody?.output_scanners);
+
+  const scannerThresholdRows = scanners.map((scanner) => {
+    if (!scanner || typeof scanner !== 'object') return '';
+    const name = firstDefined(scanner.scanner, scanner.name, scanner.type, 'Unbekannt');
+    const thresholdIs = firstDefined(scanner.score, scanner.value, scanner.current_threshold, scanner.threshold_current, '—');
+    const thresholdConfigured = firstDefined(scanner.threshold, scanner.configured_threshold, scanner.threshold_configured, '—');
+    return `<div class="result-row"><strong>${escapeHtml(name)}</strong> Schwellwert IST: <code>${escapeHtml(thresholdIs)}</code> | Schwellwert Konfiguriert: <code>${escapeHtml(thresholdConfigured)}</code></div>`;
+  }).join('');
+
+  return `
+    <div class="result-grid">
+      <div class="result-row"><strong>Statuscode</strong> <code>${escapeHtml(data?.status_code ?? '—')}</code></div>
+      <div class="result-row"><strong>Input-Status</strong> ${formatStateLabel(inputState)}</div>
+      <div class="result-row"><strong>Output-Status</strong> ${formatStateLabel(outputState)}</div>
+      <div class="result-row"><strong>Input-Scanner (gesendet)</strong> ${escapeHtml(scannerRequestInput.join(', ') || 'Keine')}</div>
+      <div class="result-row"><strong>Output-Scanner (gesendet)</strong> ${escapeHtml(scannerRequestOutput.join(', ') || 'Keine')}</div>
+      <div class="result-row"><strong>Bereinigter Input</strong><br><code>${escapeHtml(sanitizedPrompt ?? '—')}</code></div>
+      <div class="result-row"><strong>Bereinigter Output</strong><br><code>${escapeHtml(sanitizedOutput ?? '—')}</code></div>
+      <div class="result-row"><strong>Scanner-Details</strong>${scannerThresholdRows || ' Keine Scannerdetails in der Antwort vorhanden.'}</div>
+    </div>
+  `;
 }
 
 async function loadEndpoints() {
@@ -233,7 +304,7 @@ sendBtn.addEventListener('click', async () => {
     const debug = data.debug || {};
     delete data.debug;
 
-    result.textContent = JSON.stringify(data, null, 2);
+    result.innerHTML = formatResultView(data, debug);
     debugResult.textContent = JSON.stringify(debug, null, 2);
   } catch (e) {
     result.textContent = 'Fehler: ' + e.message;
