@@ -42,16 +42,10 @@
     .scanner-panel { min-height: 130px; max-height: 130px; overflow-y: auto; border: 1px solid #7775; border-radius: .45rem; padding: .45rem .55rem; background: #00000008; }
     .scanner-list { margin: 0; padding-left: 1.1rem; }
     .scanner-list li { margin: .2rem 0; }
-    .scanner-list li.scanner-hit {
-      color: #ffd3d3;
-      background: color-mix(in srgb, #d23f3f 22%, transparent);
-      border: 1px solid #d23f3f80;
-      border-radius: .35rem;
-      padding: .15rem .35rem;
-      list-style-position: inside;
-      font-weight: 700;
-      box-shadow: 0 0 .55rem color-mix(in srgb, #d23f3f 45%, transparent);
-    }
+    .scanner-list li { display: flex; align-items: center; gap: .4rem; }
+    .scanner-dot { width: .65rem; height: .65rem; border-radius: 50%; display: inline-block; }
+    .scanner-dot.hit { background: #d23f3f; }
+    .scanner-dot.ok { background: #2e8b57; }
     @media (max-width: 800px) {
       .dual-grid { grid-template-columns: 1fr; }
       .compare-columns { grid-template-columns: 1fr; }
@@ -148,6 +142,7 @@ const configRoutes = {
 let activeConfigTab = 'scanners';
 let cachedPromptScanners = [];
 let cachedOutputScanners = [];
+let scannerThresholds = { input: new Map(), output: new Map() };
 
 function firstDefined(...values) {
   for (const value of values) {
@@ -315,8 +310,12 @@ function formatResultView(data, debug, durationMs, mode) {
   const scannerStatusSection = scannerStatuses.length
     ? scannerStatuses.map((scanner) => `
       <div class="result-row">
-        <strong>Scanner ${escapeHtml(scanner.name)}</strong>
-        ${formatStateLabel(scanner.status)}
+        <strong>${escapeHtml(scanner.name)}</strong>
+        <div>
+          <span class="${scanner.triggered ? 'bad' : 'ok'}"><strong>${scanner.triggered ? 'Positiv / Aktion nötig' : 'Negativ / Keine Aktion nötig'}</strong></span>
+          <br>
+          <small class="muted">Score: <code>${escapeHtml(scanner.scoreLabel)}</code> · Threshold: <code>${escapeHtml(scanner.thresholdLabel)}</code></small>
+        </div>
       </div>
     `).join('')
     : '<div class="result-row"><strong>Scanner-Status</strong> <span class="muted">Keine Scanner-Statuswerte in der Antwort gefunden.</span></div>';
@@ -333,11 +332,41 @@ function formatResultView(data, debug, durationMs, mode) {
 function collectScannerStatuses(responsePayload, mode) {
   const response = responsePayload || {};
   const scannerMap = new Map();
+  const thresholdMap = mode === 'output' ? scannerThresholds.output : scannerThresholds.input;
 
-  function addStatus(name, state) {
+  function parseNumber(value) {
+    const asNumber = Number(value);
+    return Number.isNaN(asNumber) ? undefined : asNumber;
+  }
+
+  function formatNumber(value) {
+    return value === undefined ? '—' : String(value);
+  }
+
+  function evaluateScanner(score, threshold, fallbackStatus) {
+    if (score !== undefined && threshold !== undefined) {
+      return score >= threshold;
+    }
+    if (fallbackStatus === true) return false;
+    if (fallbackStatus === false) return true;
+    return false;
+  }
+
+  function addStatus(name, score, threshold, state) {
     if (typeof name !== 'string' || !name.trim()) return;
-    if (state !== true && state !== false) return;
-    scannerMap.set(name.trim(), state);
+    const normalizedName = normalizeScannerName(name);
+    if (!normalizedName) return;
+
+    const current = scannerMap.get(normalizedName) || { name: name.trim() };
+    const resolvedThreshold = threshold ?? thresholdMap.get(normalizedName);
+    const triggered = evaluateScanner(score, resolvedThreshold, state);
+    scannerMap.set(normalizedName, {
+      name: current.name || name.trim(),
+      score,
+      threshold: resolvedThreshold,
+      status: state,
+      triggered
+    });
   }
 
   function collectFromContainer(container, fallbackTarget) {
@@ -346,17 +375,23 @@ function collectScannerStatuses(responsePayload, mode) {
     for (const [key, value] of Object.entries(container)) {
       if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
       const validState = firstDefined(value.is_valid, value.valid, value.allowed);
-      if (validState === true || validState === false) {
-        addStatus(key, validState);
+      const score = parseNumber(firstDefined(value.score, value.value, value.probability));
+      const threshold = parseNumber(firstDefined(
+        value.threshold,
+        value.configured_threshold,
+        value.current_threshold,
+        value.threshold_current,
+        value.config?.threshold
+      ));
+
+      if (validState === true || validState === false || score !== undefined || threshold !== undefined) {
+        addStatus(key, score, threshold, validState);
       }
 
       const nestedTarget = value.target || value.mode || fallbackTarget;
       if (nestedTarget && typeof nestedTarget === 'string') {
         const targetKey = nestedTarget.toLowerCase();
-        if (targetKey.includes('output')) {
-          const nestedState = firstDefined(value.is_valid, value.valid, value.allowed);
-          if (nestedState === true || nestedState === false) addStatus(key, nestedState);
-        }
+        if (targetKey.includes('output')) addStatus(key, score, threshold, validState);
       }
     }
   }
@@ -385,9 +420,19 @@ function collectScannerStatuses(responsePayload, mode) {
     }
 
     const ownState = firstDefined(node.is_valid, node.valid, node.allowed);
+    const ownScore = parseNumber(firstDefined(node.score, node.value, node.probability));
+    const ownThreshold = parseNumber(firstDefined(
+      node.threshold,
+      node.configured_threshold,
+      node.current_threshold,
+      node.threshold_current,
+      node.config?.threshold
+    ));
     const ownName = firstDefined(node.scanner, node.name, node.type, keyHint);
     if ((ownState === true || ownState === false) && typeof ownName === 'string') {
-      addStatus(ownName, ownState);
+      addStatus(ownName, ownScore, ownThreshold, ownState);
+    } else if ((ownScore !== undefined || ownThreshold !== undefined) && typeof ownName === 'string') {
+      addStatus(ownName, ownScore, ownThreshold, ownState);
     }
 
     for (const [nestedKey, nestedValue] of Object.entries(node)) {
@@ -398,8 +443,12 @@ function collectScannerStatuses(responsePayload, mode) {
   walk(response);
 
   return Array.from(scannerMap.entries())
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([name, status]) => ({ name, status }));
+    .sort(([, a], [, b]) => a.name.localeCompare(b.name))
+    .map(([, scanner]) => ({
+      ...scanner,
+      scoreLabel: formatNumber(scanner.score),
+      thresholdLabel: formatNumber(scanner.threshold)
+    }));
 }
 
 function normalizeScannerName(value) {
@@ -409,7 +458,7 @@ function normalizeScannerName(value) {
     .replace(/[^a-z0-9]/g, '');
 }
 
-function scannerTriggered(scanner) {
+function scannerTriggered(scanner, configuredThreshold) {
   if (!scanner || typeof scanner !== 'object') return false;
 
   const explicitDetected = firstDefined(
@@ -432,7 +481,8 @@ function scannerTriggered(scanner) {
     scanner.configured_threshold,
     scanner.current_threshold,
     scanner.threshold_current,
-    scanner.config?.threshold
+    scanner.config?.threshold,
+    configuredThreshold
   ));
 
   if (!Number.isNaN(score) && !Number.isNaN(threshold) && score >= threshold) return true;
@@ -443,18 +493,6 @@ function collectTriggeredScanners(responsePayload, mode, debugPayload = {}) {
   const response = responsePayload || {};
   const triggeredInput = new Set();
   const triggeredOutput = new Set();
-
-  function addTriggeredByNameHints(targetSet, names, originalText, sanitizedText) {
-    if (String(originalText ?? '') === String(sanitizedText ?? '')) return;
-
-    for (const scannerName of names) {
-      const normalized = normalizeScannerName(scannerName);
-      if (!normalized) continue;
-      if (normalized.includes('anonymize') || normalized.includes('deanonymize')) {
-        targetSet.add(normalized);
-      }
-    }
-  }
 
   function addTriggeredScanner(name, target) {
     const normalized = normalizeScannerName(name);
@@ -501,7 +539,12 @@ function collectTriggeredScanners(responsePayload, mode, debugPayload = {}) {
     );
     const target = firstDefined(value.target, value.stage, value.kind, targetHint);
 
-    if (scannerName && scannerTriggered(value)) {
+    const normalized = normalizeScannerName(scannerName);
+    const thresholdForScanner = target === 'output'
+      ? scannerThresholds.output.get(normalized)
+      : scannerThresholds.input.get(normalized);
+
+    if (scannerName && scannerTriggered(value, thresholdForScanner)) {
       addTriggeredScanner(scannerName, target);
     }
 
@@ -512,7 +555,11 @@ function collectTriggeredScanners(responsePayload, mode, debugPayload = {}) {
           ? 'input'
           : target;
 
-      if (looksLikeScannerResult(nestedValue) && scannerTriggered(nestedValue)) {
+      const nestedThreshold = nestedTarget === 'output'
+        ? scannerThresholds.output.get(normalizeScannerName(nestedKey))
+        : scannerThresholds.input.get(normalizeScannerName(nestedKey));
+
+      if (looksLikeScannerResult(nestedValue) && scannerTriggered(nestedValue, nestedThreshold)) {
         addTriggeredScanner(nestedKey, nestedTarget);
       }
 
@@ -521,28 +568,6 @@ function collectTriggeredScanners(responsePayload, mode, debugPayload = {}) {
   }
 
   walk(response, '', mode);
-
-  const requestPayload = debugPayload?.request?.json_body || {};
-  const responsePayloadData = response || {};
-
-  const rawPrompt = firstDefined(requestPayload.prompt, responsePayloadData.prompt, '');
-  const sanitizedPrompt = firstDefined(
-    responsePayloadData.sanitized_prompt,
-    responsePayloadData.prompt_sanitized,
-    responsePayloadData.prompt,
-    ''
-  );
-
-  const rawOutput = firstDefined(requestPayload.output, responsePayloadData.output, '');
-  const sanitizedOutput = firstDefined(
-    responsePayloadData.sanitized_output,
-    responsePayloadData.output_sanitized,
-    responsePayloadData.output,
-    ''
-  );
-
-  addTriggeredByNameHints(triggeredInput, cachedPromptScanners, rawPrompt, sanitizedPrompt);
-  addTriggeredByNameHints(triggeredOutput, cachedOutputScanners, rawOutput, sanitizedOutput);
 
   return { triggeredInput, triggeredOutput };
 }
@@ -557,9 +582,8 @@ function renderScannerList(element, scanners, triggeredSet = new Set()) {
   element.innerHTML = names
     .map((name) => {
       const isTriggered = triggeredSet.has(normalizeScannerName(name));
-      const cssClass = isTriggered ? 'scanner-hit' : '';
-      const marker = isTriggered ? ' 🔴' : '';
-      return `<li class="${cssClass}"><code>${escapeHtml(name)}</code>${marker}</li>`;
+      const markerClass = isTriggered ? 'hit' : 'ok';
+      return `<li><span class="scanner-dot ${markerClass}" title="${isTriggered ? 'Treffer' : 'Kein Treffer'}"></span><code>${escapeHtml(name)}</code></li>`;
     })
     .join('');
 }
@@ -568,23 +592,55 @@ function applyScannerHighlights(triggeredInput = new Set(), triggeredOutput = ne
   renderScannerList(promptScannersList, cachedPromptScanners, triggeredInput);
   renderScannerList(outputScannersList, cachedOutputScanners, triggeredOutput);
 
-  const applyDomClass = (listElement, triggeredSet) => {
-    const items = listElement.querySelectorAll('li');
-    for (const item of items) {
-      const scannerName = item.textContent || '';
-      const isTriggered = triggeredSet.has(normalizeScannerName(scannerName));
-      item.classList.toggle('scanner-hit', isTriggered);
-      if (isTriggered && !item.textContent.includes('🔴')) {
-        item.textContent = `${scannerName.replace(' 🔴', '')} 🔴`;
-      }
-      if (!isTriggered) {
-        item.textContent = scannerName.replace(' 🔴', '');
+}
+
+function extractThresholdEntries(node, targetHint = 'input', out = { input: new Map(), output: new Map() }) {
+  if (!node || typeof node !== 'object') return out;
+
+  if (Array.isArray(node)) {
+    for (const item of node) extractThresholdEntries(item, targetHint, out);
+    return out;
+  }
+
+  const possibleName = firstDefined(node.name, node.scanner, node.type);
+  const threshold = Number(firstDefined(node.threshold, node.config?.threshold));
+  if (typeof possibleName === 'string' && possibleName.trim() && !Number.isNaN(threshold)) {
+    const normalized = normalizeScannerName(possibleName);
+    const target = String(firstDefined(node.target, node.stage, targetHint)).toLowerCase();
+    if (target.includes('output')) out.output.set(normalized, threshold);
+    else out.input.set(normalized, threshold);
+  }
+
+  for (const [key, value] of Object.entries(node)) {
+    let nestedHint = targetHint;
+    const normalizedKey = key.toLowerCase();
+    if (normalizedKey.includes('output')) nestedHint = 'output';
+    if (normalizedKey.includes('input') || normalizedKey.includes('prompt')) nestedHint = 'input';
+
+    if (normalizedKey === 'threshold' && typeof value === 'number') {
+      const scannerName = node.name || node.scanner || node.type;
+      if (typeof scannerName === 'string') {
+        const normalized = normalizeScannerName(scannerName);
+        if (nestedHint === 'output') out.output.set(normalized, value);
+        else out.input.set(normalized, value);
       }
     }
-  };
 
-  applyDomClass(promptScannersList, triggeredInput);
-  applyDomClass(outputScannersList, triggeredOutput);
+    extractThresholdEntries(value, nestedHint, out);
+  }
+
+  return out;
+}
+
+async function loadScannerThresholds() {
+  try {
+    const res = await fetch('/api/config/scanners');
+    const data = await res.json();
+    const source = data?.response || data;
+    scannerThresholds = extractThresholdEntries(source);
+  } catch (_error) {
+    scannerThresholds = { input: new Map(), output: new Map() };
+  }
 }
 
 async function loadActiveScanners() {
@@ -647,7 +703,7 @@ sendOutputBtn.addEventListener('click', async () => {
   await sendAnalyzeRequest('/analyze/output', outputInput.value, outputResult);
 });
 
-loadActiveScanners();
+Promise.all([loadScannerThresholds(), loadActiveScanners()]);
 
 function setActiveConfigTab(tabName) {
   activeConfigTab = tabName;
