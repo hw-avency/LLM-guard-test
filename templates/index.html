@@ -26,6 +26,14 @@
     .result-grid { display: grid; gap: .65rem; }
     .result-row { padding: .5rem .65rem; border: 1px solid #7775; border-radius: .5rem; background: #00000008; }
     .result-row strong { display: inline-block; min-width: 220px; }
+    .highlight-box { white-space: pre-wrap; word-break: break-word; line-height: 1.45; }
+    .critical-highlight { background: color-mix(in srgb, #d23f3f 30%, transparent); color: #ffb1b1; border-radius: .2rem; padding: 0 .1rem; }
+    .inserted-highlight { background: color-mix(in srgb, #2e8b57 25%, transparent); color: #b8f0cb; border-radius: .2rem; padding: 0 .1rem; }
+    .legend { display: flex; flex-wrap: wrap; gap: .6rem; font-size: .92rem; margin-bottom: .4rem; }
+    .legend-item { display: inline-flex; align-items: center; gap: .3rem; }
+    .legend-swatch { width: .9rem; height: .9rem; border-radius: .2rem; display: inline-block; }
+    .legend-swatch-critical { background: color-mix(in srgb, #d23f3f 35%, transparent); border: 1px solid #d23f3f80; }
+    .legend-swatch-inserted { background: color-mix(in srgb, #2e8b57 25%, transparent); border: 1px solid #2e8b5780; }
   </style>
 </head>
 <body>
@@ -150,6 +158,85 @@ function formatStateLabel(value) {
   return '<span class="warn"><strong>Aktion nötig</strong></span>';
 }
 
+function tokenizeForDiff(value) {
+  return String(value || '').match(/\s+|[^\s]+/g) || [];
+}
+
+function buildDiffOps(originalText, sanitizedText) {
+  const originalTokens = tokenizeForDiff(originalText);
+  const sanitizedTokens = tokenizeForDiff(sanitizedText);
+  const rows = originalTokens.length + 1;
+  const cols = sanitizedTokens.length + 1;
+  const dp = Array.from({ length: rows }, () => new Array(cols).fill(0));
+
+  for (let i = 1; i < rows; i += 1) {
+    for (let j = 1; j < cols; j += 1) {
+      if (originalTokens[i - 1] === sanitizedTokens[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+  }
+
+  const ops = [];
+  let i = originalTokens.length;
+  let j = sanitizedTokens.length;
+
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && originalTokens[i - 1] === sanitizedTokens[j - 1]) {
+      ops.push({ type: 'equal', token: originalTokens[i - 1] });
+      i -= 1;
+      j -= 1;
+      continue;
+    }
+
+    if (i > 0 && (j === 0 || dp[i - 1][j] >= dp[i][j - 1])) {
+      ops.push({ type: 'delete', token: originalTokens[i - 1] });
+      i -= 1;
+      continue;
+    }
+
+    if (j > 0) {
+      ops.push({ type: 'insert', token: sanitizedTokens[j - 1] });
+      j -= 1;
+    }
+  }
+
+  return ops.reverse();
+}
+
+function formatHighlightedText(originalText, sanitizedText) {
+  const normalizedOriginal = String(originalText ?? '');
+  const normalizedSanitized = String(sanitizedText ?? '');
+  const ops = buildDiffOps(normalizedOriginal, normalizedSanitized);
+
+  const originalHtml = ops
+    .filter((op) => op.type !== 'insert')
+    .map((op) => {
+      const escapedToken = escapeHtml(op.token);
+      return op.type === 'delete'
+        ? `<span class="critical-highlight" title="Als kritisch erkannt / entfernt">${escapedToken}</span>`
+        : escapedToken;
+    })
+    .join('');
+
+  const sanitizedHtml = ops
+    .filter((op) => op.type !== 'delete')
+    .map((op) => {
+      const escapedToken = escapeHtml(op.token);
+      return op.type === 'insert'
+        ? `<span class="inserted-highlight" title="Von LLM Guard ergänzt/ersetzt">${escapedToken}</span>`
+        : escapedToken;
+    })
+    .join('');
+
+  return {
+    originalHtml: originalHtml || '—',
+    sanitizedHtml: sanitizedHtml || '—'
+  };
+}
+
 function formatResultView(data, debug) {
   const response = data?.response || {};
   const scanners = asList(response?.scanners);
@@ -170,6 +257,10 @@ function formatResultView(data, debug) {
 
   const scannerRequestInput = asList(requestBody?.input_scanners);
   const scannerRequestOutput = asList(requestBody?.output_scanners);
+  const rawPrompt = firstDefined(requestBody?.prompt, response?.prompt, '');
+  const rawOutput = firstDefined(requestBody?.output, response?.output, '');
+  const promptDiff = formatHighlightedText(rawPrompt, sanitizedPrompt);
+  const outputDiff = formatHighlightedText(rawOutput, sanitizedOutput);
 
   const scannerThresholdRows = scanners.map((scanner) => {
     if (!scanner || typeof scanner !== 'object') return '';
@@ -188,6 +279,28 @@ function formatResultView(data, debug) {
       <div class="result-row"><strong>Output-Scanner (gesendet)</strong> ${escapeHtml(scannerRequestOutput.join(', ') || 'Keine')}</div>
       <div class="result-row"><strong>Bereinigter Input</strong><br><code>${escapeHtml(sanitizedPrompt ?? '—')}</code></div>
       <div class="result-row"><strong>Bereinigter Output</strong><br><code>${escapeHtml(sanitizedOutput ?? '—')}</code></div>
+      <div class="result-row">
+        <strong>Kritische Stellen im Prompt</strong>
+        <div class="legend">
+          <span class="legend-item"><span class="legend-swatch legend-swatch-critical"></span> Kritisch erkannt (im Original entfernt/geändert)</span>
+          <span class="legend-item"><span class="legend-swatch legend-swatch-inserted"></span> Durch Sanitizing ergänzt/ersetzt</span>
+        </div>
+        <div><small class="muted">Original</small></div>
+        <div class="highlight-box">${promptDiff.originalHtml}</div>
+        <div style="margin-top:.45rem;"><small class="muted">Bereinigt</small></div>
+        <div class="highlight-box">${promptDiff.sanitizedHtml}</div>
+      </div>
+      <div class="result-row">
+        <strong>Kritische Stellen im Output</strong>
+        <div class="legend">
+          <span class="legend-item"><span class="legend-swatch legend-swatch-critical"></span> Kritisch erkannt (im Original entfernt/geändert)</span>
+          <span class="legend-item"><span class="legend-swatch legend-swatch-inserted"></span> Durch Sanitizing ergänzt/ersetzt</span>
+        </div>
+        <div><small class="muted">Original</small></div>
+        <div class="highlight-box">${outputDiff.originalHtml}</div>
+        <div style="margin-top:.45rem;"><small class="muted">Bereinigt</small></div>
+        <div class="highlight-box">${outputDiff.sanitizedHtml}</div>
+      </div>
       <div class="result-row"><strong>Scanner-Details</strong>${scannerThresholdRows || ' Keine Scannerdetails in der Antwort vorhanden.'}</div>
     </div>
   `;
