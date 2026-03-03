@@ -11,6 +11,7 @@ Kleine Flask-Webapp, um eine bestehende `llm-guard` API-Instanz über ein Browse
   - `OPENAPI_SPEC_URL` (optional, Default auf gehostete OpenAPI-URL)
 - Einfaches Webinterface mit Endpoint-Dropdown (aus OpenAPI geladen) und automatisch vorgeschlagenem JSON-Body je Endpoint.
 - Optional einblendbare Konfigurationsansicht für `GET /config/` und `GET /config/scanners` direkt in der UI.
+- Scanner-Auswahl aus den verfügbaren Upstream-Scannern; Auswahl wird automatisch als `scanners` im API-Request übergeben.
 - Serverseitiger Forward an LLM Guard inkl. `Authorization: Bearer <AUTH_TOKEN>`.
 - Docker-ready für Google Cloud Run.
 - Direkter Kompatibilitäts-Endpoint `POST /analyze/prompt` für Clients, die nicht über `/api/forward` senden.

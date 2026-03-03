@@ -262,6 +262,51 @@ def get_upstream_config(endpoint: str) -> Tuple[Any, int]:
     return jsonify({"status_code": response.status_code, "target_url": target_url, "response": data}), response.status_code
 
 
+def load_scanner_names() -> Tuple[List[str], str]:
+    config = get_config()
+    if not config["api_url"]:
+        return [], "API_URL ist nicht gesetzt."
+    if not config["auth_token"]:
+        return [], "AUTH_TOKEN ist nicht gesetzt."
+
+    try:
+        timeout_seconds = int(config["upstream_timeout_seconds"])
+    except ValueError:
+        return [], "UPSTREAM_TIMEOUT_SECONDS muss eine Ganzzahl sein."
+
+    if timeout_seconds <= 0:
+        return [], "UPSTREAM_TIMEOUT_SECONDS muss > 0 sein."
+
+    target_url = f"{config['api_url'].rstrip('/')}/config/scanners"
+    headers = {"Authorization": f"Bearer {config['auth_token']}"}
+
+    try:
+        response = requests.get(target_url, headers=headers, timeout=timeout_seconds)
+        response.raise_for_status()
+        payload = response.json()
+    except requests.RequestException as exc:
+        return [], f"Scanner-Konfiguration konnte nicht geladen werden: {exc}"
+    except ValueError as exc:
+        return [], f"Scanner-Konfiguration ist kein gültiges JSON: {exc}"
+
+    scanner_names: List[str] = []
+    source = payload.get("scanners") if isinstance(payload, dict) else payload
+
+    if isinstance(source, list):
+        for entry in source:
+            if isinstance(entry, str):
+                scanner_names.append(entry)
+            elif isinstance(entry, dict):
+                name = entry.get("name")
+                if isinstance(name, str) and name.strip():
+                    scanner_names.append(name.strip())
+    elif isinstance(source, dict):
+        scanner_names.extend([key for key in source.keys() if isinstance(key, str) and key.strip()])
+
+    unique_sorted_names = sorted(set(scanner_names))
+    return unique_sorted_names, ""
+
+
 @app.get("/")
 def index() -> str:
     config = get_config()
@@ -300,6 +345,14 @@ def get_config_root() -> Any:
 @app.get("/api/config/scanners")
 def get_config_scanners() -> Any:
     return get_upstream_config(endpoint="/config/scanners")
+
+
+@app.get("/api/scanners/available")
+def get_available_scanners() -> Any:
+    scanners, error = load_scanner_names()
+    if error:
+        return jsonify({"error": error}), 502
+    return jsonify({"scanners": scanners})
 
 
 @app.post("/analyze/prompt")
