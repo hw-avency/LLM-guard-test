@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 from flask import Flask, jsonify, render_template, request
@@ -24,11 +24,62 @@ def get_config() -> Dict[str, str]:
     }
 
 
-def generate_example_from_schema(schema: Dict[str, Any]) -> Any:
+def resolve_ref(spec: Dict[str, Any], ref: str) -> Optional[Dict[str, Any]]:
+    if not ref.startswith("#/"):
+        return None
+
+    node: Any = spec
+    for part in ref[2:].split("/"):
+        if not isinstance(node, dict):
+            return None
+        node = node.get(part)
+        if node is None:
+            return None
+
+    return node if isinstance(node, dict) else None
+
+
+def resolve_schema(spec: Dict[str, Any], schema: Dict[str, Any]) -> Dict[str, Any]:
+    resolved = dict(schema)
+
+    if "$ref" in resolved:
+        target = resolve_ref(spec, str(resolved["$ref"]))
+        if target is not None:
+            ref_copy = dict(resolved)
+            ref_copy.pop("$ref", None)
+            resolved = {**resolve_schema(spec, target), **ref_copy}
+
+    if "allOf" in resolved and isinstance(resolved["allOf"], list):
+        merged: Dict[str, Any] = {"type": "object", "properties": {}, "required": []}
+        for part in resolved["allOf"]:
+            if not isinstance(part, dict):
+                continue
+            part_resolved = resolve_schema(spec, part)
+            for key, value in part_resolved.items():
+                if key == "properties" and isinstance(value, dict):
+                    merged.setdefault("properties", {}).update(value)
+                elif key == "required" and isinstance(value, list):
+                    merged.setdefault("required", []).extend(value)
+                elif key not in {"properties", "required"}:
+                    merged[key] = value
+        merged["required"] = sorted(set(merged.get("required", [])))
+        resolved = {**merged, **{k: v for k, v in resolved.items() if k != "allOf"}}
+
+    return resolved
+
+
+def generate_example_from_schema(spec: Dict[str, Any], schema: Dict[str, Any]) -> Any:
+    schema = resolve_schema(spec, schema)
     schema_type = schema.get("type")
 
     if "example" in schema:
         return schema["example"]
+
+    if "enum" in schema and isinstance(schema["enum"], list) and schema["enum"]:
+        return schema["enum"][0]
+
+    if "default" in schema:
+        return schema["default"]
 
     if schema_type == "object":
         properties = schema.get("properties", {})
@@ -39,16 +90,18 @@ def generate_example_from_schema(schema: Dict[str, Any]) -> Any:
         example_object = {}
         for key, value in properties.items():
             if key in required:
-                example_object[key] = generate_example_from_schema(value)
+                example_object[key] = generate_example_from_schema(spec, value)
         if example_object:
             return example_object
 
         first_key = next(iter(properties))
-        return {first_key: generate_example_from_schema(properties[first_key])}
+        return {first_key: generate_example_from_schema(spec, properties[first_key])}
 
     if schema_type == "array":
         item_schema = schema.get("items", {})
-        return [generate_example_from_schema(item_schema)]
+        if isinstance(item_schema, dict):
+            return [generate_example_from_schema(spec, item_schema)]
+        return []
 
     if schema_type == "integer":
         return 0
@@ -59,10 +112,15 @@ def generate_example_from_schema(schema: Dict[str, Any]) -> Any:
     return ""
 
 
-def extract_example_body(operation: Dict[str, Any]) -> Dict[str, Any]:
+def extract_example_body(spec: Dict[str, Any], operation: Dict[str, Any]) -> Dict[str, Any]:
     request_body = operation.get("requestBody", {})
+    if isinstance(request_body, dict) and "$ref" in request_body:
+        resolved_request_body = resolve_ref(spec, str(request_body["$ref"]))
+        if isinstance(resolved_request_body, dict):
+            request_body = resolved_request_body
+
     content = request_body.get("content", {})
-    json_content = content.get("application/json", {})
+    json_content = content.get("application/json") or content.get("application/*+json") or {}
 
     if "example" in json_content and isinstance(json_content["example"], dict):
         return json_content["example"]
@@ -76,7 +134,7 @@ def extract_example_body(operation: Dict[str, Any]) -> Dict[str, Any]:
 
     schema = json_content.get("schema", {})
     if isinstance(schema, dict):
-        generated = generate_example_from_schema(schema)
+        generated = generate_example_from_schema(spec, schema)
         if isinstance(generated, dict):
             return generated
 
@@ -114,7 +172,7 @@ def load_available_endpoints() -> Tuple[List[Dict[str, Any]], str]:
                     "method": method_name.upper(),
                     "path": path,
                     "summary": operation.get("summary", ""),
-                    "example_body": extract_example_body(operation),
+                    "example_body": extract_example_body(spec, operation),
                 }
             )
 
