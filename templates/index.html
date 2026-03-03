@@ -410,6 +410,11 @@ function collectTriggeredScanners(responsePayload, mode) {
     }
   }
 
+  function looksLikeScannerResult(candidate) {
+    if (!candidate || typeof candidate !== 'object') return false;
+    return ['score', 'threshold', 'is_valid', 'valid', 'allowed', 'detected', 'triggered'].some((key) => key in candidate);
+  }
+
   function walk(value, keyHint = '', targetHint = '') {
     if (Array.isArray(value)) {
       for (const item of value) walk(item, keyHint, targetHint);
@@ -422,7 +427,8 @@ function collectTriggeredScanners(responsePayload, mode) {
       value.name,
       value.scanner,
       value.type,
-      keyHint && keyHint.toLowerCase().includes('scanner') ? keyHint : undefined
+      keyHint && keyHint.toLowerCase().includes('scanner') ? keyHint : undefined,
+      looksLikeScannerResult(value) ? keyHint : undefined
     );
     const target = firstDefined(value.target, value.stage, value.kind, targetHint);
 
@@ -436,6 +442,11 @@ function collectTriggeredScanners(responsePayload, mode) {
         : nestedKey.toLowerCase().includes('input') || nestedKey.toLowerCase().includes('prompt')
           ? 'input'
           : target;
+
+      if (looksLikeScannerResult(nestedValue) && scannerTriggered(nestedValue)) {
+        addTriggeredScanner(nestedKey, nestedTarget);
+      }
+
       walk(nestedValue, nestedKey, nestedTarget);
     }
   }
