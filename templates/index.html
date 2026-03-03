@@ -39,6 +39,7 @@
     .dual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
     .column-stack { align-content: start; }
     .column-stack pre { min-height: 220px; }
+    .scanner-panel { min-height: 130px; max-height: 130px; overflow-y: auto; border: 1px solid #7775; border-radius: .45rem; padding: .45rem .55rem; background: #00000008; }
     .scanner-list { margin: 0; padding-left: 1.1rem; }
     .scanner-list li { margin: .2rem 0; }
     .scanner-list li.scanner-hit {
@@ -70,7 +71,7 @@
     <div class="dual-grid">
       <div class="row column-stack">
         <h2 style="margin: 0;">Prompt</h2>
-        <div>
+        <div class="scanner-panel">
           <strong>Aktive Prompt-Scanner:</strong>
           <ul id="promptScanners" class="scanner-list">
             <li class="muted">Lade Scanner…</li>
@@ -86,7 +87,7 @@
 
       <div class="row column-stack">
         <h2 style="margin: 0;">Output</h2>
-        <div>
+        <div class="scanner-panel">
           <strong>Aktive Output-Scanner:</strong>
           <ul id="outputScanners" class="scanner-list">
             <li class="muted">Lade Scanner…</li>
@@ -256,7 +257,7 @@ function formatHighlightedText(originalText, sanitizedText) {
   };
 }
 
-function formatResultView(data, debug, durationMs) {
+function formatResultView(data, debug, durationMs, mode) {
   const response = data?.response || {};
   const scanners = asList(response?.scanners);
   const requestBody = debug?.request?.json_body || {};
@@ -308,14 +309,7 @@ function formatResultView(data, debug, durationMs) {
     return `<div class="result-row"><strong>${escapeHtml(name)}</strong> Schwellwert IST: <code>${escapeHtml(thresholdIs)}</code> | Schwellwert Konfiguriert: <code>${escapeHtml(thresholdConfigured)}</code></div>`;
   }).join('');
 
-  return `
-    <div class="result-grid">
-      <div class="result-row"><strong>Statuscode</strong> <code>${escapeHtml(data?.status_code ?? '—')}</code></div>
-      <div class="result-row"><strong>Request-Dauer</strong> <code>${escapeHtml(durationMs ?? '—')} ms</code></div>
-      <div class="result-row"><strong>Input-Status</strong> ${formatStateLabel(inputState)}</div>
-      <div class="result-row"><strong>Output-Status</strong> ${formatOutputStateLabel(outputState, hasOutputScannerResult)}</div>
-      <div class="result-row"><strong>Bereinigter Input</strong><br><code>${escapeHtml(sanitizedPrompt ?? '—')}</code></div>
-      <div class="result-row"><strong>Bereinigter Output</strong><br><code>${escapeHtml(sanitizedOutput ?? '—')}</code></div>
+  const promptCriticalSection = `
       <div class="result-row">
         <strong>Kritische Stellen im Prompt</strong>
         <div class="legend">
@@ -332,7 +326,9 @@ function formatResultView(data, debug, durationMs) {
             <div class="highlight-box">${promptDiff.sanitizedHtml}</div>
           </div>
         </div>
-      </div>
+      </div>`;
+
+  const outputCriticalSection = `
       <div class="result-row">
         <strong>Kritische Stellen im Output</strong>
         <div class="legend">
@@ -349,14 +345,29 @@ function formatResultView(data, debug, durationMs) {
             <div class="highlight-box">${outputDiff.sanitizedHtml}</div>
           </div>
         </div>
-      </div>
+      </div>`;
+
+  const criticalSection = mode === 'output' ? outputCriticalSection : promptCriticalSection;
+
+  return `
+    <div class="result-grid">
+      <div class="result-row"><strong>Statuscode</strong> <code>${escapeHtml(data?.status_code ?? '—')}</code></div>
+      <div class="result-row"><strong>Request-Dauer</strong> <code>${escapeHtml(durationMs ?? '—')} ms</code></div>
+      <div class="result-row"><strong>Input-Status</strong> ${formatStateLabel(inputState)}</div>
+      <div class="result-row"><strong>Output-Status</strong> ${formatOutputStateLabel(outputState, hasOutputScannerResult)}</div>
+      <div class="result-row"><strong>Bereinigter Input</strong><br><code>${escapeHtml(sanitizedPrompt ?? '—')}</code></div>
+      <div class="result-row"><strong>Bereinigter Output</strong><br><code>${escapeHtml(sanitizedOutput ?? '—')}</code></div>
+      ${criticalSection}
       <div class="result-row"><strong>Scanner-Details</strong>${scannerThresholdRows || ' Keine Scannerdetails in der Antwort vorhanden.'}</div>
     </div>
   `;
 }
 
 function normalizeScannerName(value) {
-  return String(value || '').trim().toLowerCase();
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
 }
 
 function scannerTriggered(scanner) {
@@ -389,16 +400,40 @@ function scannerTriggered(scanner) {
   return false;
 }
 
-function collectTriggeredScanners(responsePayload) {
+function collectTriggeredScanners(responsePayload, mode) {
   const response = responsePayload || {};
   const triggeredInput = new Set();
   const triggeredOutput = new Set();
 
-  const scannerSources = [
-    { list: asList(response?.input_scanners), target: 'input' },
-    { list: asList(response?.output_scanners), target: 'output' },
-    { list: asList(response?.scanners), target: 'unknown' }
-  ];
+  const scannerSources = [];
+
+  function pushIfArray(list, target) {
+    if (Array.isArray(list) && list.length > 0) {
+      scannerSources.push({ list, target });
+    }
+  }
+
+  pushIfArray(response?.input_scanners, 'input');
+  pushIfArray(response?.output_scanners, 'output');
+  pushIfArray(response?.scanners, mode === 'prompt' ? 'input' : mode === 'output' ? 'output' : 'unknown');
+
+  for (const key of Object.keys(response)) {
+    const value = response[key];
+    if (!Array.isArray(value)) continue;
+    if (!key.toLowerCase().includes('scanner')) continue;
+
+    const loweredKey = key.toLowerCase();
+    const inferredTarget = loweredKey.includes('output')
+      ? 'output'
+      : loweredKey.includes('input') || loweredKey.includes('prompt')
+        ? 'input'
+        : mode === 'prompt'
+          ? 'input'
+          : mode === 'output'
+            ? 'output'
+            : 'unknown';
+    pushIfArray(value, inferredTarget);
+  }
 
   for (const source of scannerSources) {
     for (const scanner of source.list) {
@@ -488,10 +523,11 @@ async function sendAnalyzeRequest(endpoint, textValue, resultElement) {
     const debug = data.debug || {};
     delete data.debug;
 
-    const scannerHits = collectTriggeredScanners(data.response);
+    const mode = endpoint.toLowerCase().includes('/analyze/output') ? 'output' : 'prompt';
+    const scannerHits = collectTriggeredScanners(data.response, mode);
     applyScannerHighlights(scannerHits.triggeredInput, scannerHits.triggeredOutput);
 
-    resultElement.innerHTML = formatResultView(data, debug, durationMs);
+    resultElement.innerHTML = formatResultView(data, debug, durationMs, mode);
     debugResult.textContent = JSON.stringify(debug, null, 2);
   } catch (e) {
     resultElement.textContent = 'Fehler: ' + e.message;
