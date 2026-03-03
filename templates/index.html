@@ -57,18 +57,6 @@
     <label for="output">Output (optional)</label>
     <textarea id="output" placeholder="Optionaler Modell-Output für Output-Scanner"></textarea>
 
-    <div class="row">
-      <div>
-        <label for="inputScannerSelect">Input-Scanner auswählen (optional)</label>
-        <select id="inputScannerSelect" multiple size="6"></select>
-      </div>
-      <div>
-        <label for="outputScannerSelect">Output-Scanner auswählen (optional)</label>
-        <select id="outputScannerSelect" multiple size="6"></select>
-      </div>
-      <small class="muted">Mit Strg/Cmd-Klick mehrere auswählen. Die Scanner werden im Hintergrund als Query-Parameter und JSON-Felder gesendet.</small>
-    </div>
-
     <button id="send">Request senden</button>
   </div>
 
@@ -106,8 +94,6 @@ const debugResult = document.getElementById('debugResult');
 const endpointSelect = document.getElementById('endpoint');
 const promptInput = document.getElementById('prompt');
 const outputInput = document.getElementById('output');
-const inputScannerSelect = document.getElementById('inputScannerSelect');
-const outputScannerSelect = document.getElementById('outputScannerSelect');
 const toggleConfigBtn = document.getElementById('toggleConfig');
 const configPanel = document.getElementById('configPanel');
 const configResult = document.getElementById('configResult');
@@ -156,6 +142,11 @@ function formatStateLabel(value) {
   if (value === true) return '<span class="ok"><strong>Erlaubt</strong></span>';
   if (value === false) return '<span class="bad"><strong>Nicht erlaubt / Aktion nötig</strong></span>';
   return '<span class="warn"><strong>Aktion nötig</strong></span>';
+}
+
+function formatOutputStateLabel(value, hasOutputScannerResult) {
+  if (!hasOutputScannerResult) return '<span class="muted"><strong>(nicht zutreffend)</strong></span>';
+  return formatStateLabel(value);
 }
 
 function tokenizeForDiff(value) {
@@ -255,18 +246,37 @@ function formatResultView(data, debug) {
     response?.output
   );
 
-  const scannerRequestInput = asList(requestBody?.input_scanners);
   const scannerRequestOutput = asList(requestBody?.output_scanners);
+  const hasOutputScannerResult = outputState !== undefined || scannerRequestOutput.length > 0;
   const rawPrompt = firstDefined(requestBody?.prompt, response?.prompt, '');
   const rawOutput = firstDefined(requestBody?.output, response?.output, '');
   const promptDiff = formatHighlightedText(rawPrompt, sanitizedPrompt);
   const outputDiff = formatHighlightedText(rawOutput, sanitizedOutput);
 
-  const scannerThresholdRows = scanners.map((scanner) => {
+  const thresholdSources = [
+    ...scanners,
+    ...asList(response?.input_scanners),
+    ...asList(response?.output_scanners)
+  ];
+  const scannerThresholdRows = thresholdSources.map((scanner) => {
     if (!scanner || typeof scanner !== 'object') return '';
     const name = firstDefined(scanner.scanner, scanner.name, scanner.type, 'Unbekannt');
-    const thresholdIs = firstDefined(scanner.score, scanner.value, scanner.current_threshold, scanner.threshold_current, '—');
-    const thresholdConfigured = firstDefined(scanner.threshold, scanner.configured_threshold, scanner.threshold_configured, '—');
+    const thresholdIs = firstDefined(
+      scanner.score,
+      scanner.value,
+      scanner.current_threshold,
+      scanner.threshold_current,
+      scanner.threshold,
+      scanner.threshold_is,
+      '—'
+    );
+    const thresholdConfigured = firstDefined(
+      scanner.configured_threshold,
+      scanner.threshold_configured,
+      scanner.config?.threshold,
+      scanner.threshold,
+      '—'
+    );
     return `<div class="result-row"><strong>${escapeHtml(name)}</strong> Schwellwert IST: <code>${escapeHtml(thresholdIs)}</code> | Schwellwert Konfiguriert: <code>${escapeHtml(thresholdConfigured)}</code></div>`;
   }).join('');
 
@@ -274,9 +284,7 @@ function formatResultView(data, debug) {
     <div class="result-grid">
       <div class="result-row"><strong>Statuscode</strong> <code>${escapeHtml(data?.status_code ?? '—')}</code></div>
       <div class="result-row"><strong>Input-Status</strong> ${formatStateLabel(inputState)}</div>
-      <div class="result-row"><strong>Output-Status</strong> ${formatStateLabel(outputState)}</div>
-      <div class="result-row"><strong>Input-Scanner (gesendet)</strong> ${escapeHtml(scannerRequestInput.join(', ') || 'Keine')}</div>
-      <div class="result-row"><strong>Output-Scanner (gesendet)</strong> ${escapeHtml(scannerRequestOutput.join(', ') || 'Keine')}</div>
+      <div class="result-row"><strong>Output-Status</strong> ${formatOutputStateLabel(outputState, hasOutputScannerResult)}</div>
       <div class="result-row"><strong>Bereinigter Input</strong><br><code>${escapeHtml(sanitizedPrompt ?? '—')}</code></div>
       <div class="result-row"><strong>Bereinigter Output</strong><br><code>${escapeHtml(sanitizedOutput ?? '—')}</code></div>
       <div class="result-row">
@@ -340,47 +348,6 @@ async function loadEndpoints() {
   }
 }
 
-async function loadScanners() {
-  inputScannerSelect.innerHTML = '';
-  outputScannerSelect.innerHTML = '';
-
-  const addPlaceholder = (select, message) => {
-    const option = document.createElement('option');
-    option.disabled = true;
-    option.textContent = message;
-    select.appendChild(option);
-  };
-
-  const addOptions = (select, scanners, emptyMessage) => {
-    if (!Array.isArray(scanners) || scanners.length === 0) {
-      addPlaceholder(select, emptyMessage);
-      return;
-    }
-
-    for (const scanner of scanners) {
-      const option = document.createElement('option');
-      option.value = scanner;
-      option.textContent = scanner;
-      select.appendChild(option);
-    }
-  };
-
-  try {
-    const res = await fetch('/api/scanners/available');
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error(data.error || 'Scanner konnten nicht geladen werden.');
-    }
-
-    addOptions(inputScannerSelect, data.input_scanners, 'Keine Input-Scanner gefunden');
-    addOptions(outputScannerSelect, data.output_scanners, 'Keine Output-Scanner gefunden');
-  } catch (e) {
-    addPlaceholder(inputScannerSelect, 'Fehler: ' + e.message);
-    addPlaceholder(outputScannerSelect, 'Fehler: ' + e.message);
-  }
-}
-
 endpointSelect.addEventListener('change', (event) => {
   setFieldsFromEndpoint(event.target.value);
 });
@@ -388,19 +355,10 @@ endpointSelect.addEventListener('change', (event) => {
 sendBtn.addEventListener('click', async () => {
   const endpoint = endpointSelect.value.trim();
 
-  const selectedInputScanners = Array.from(inputScannerSelect.selectedOptions)
-    .map((option) => option.value)
-    .filter((value) => Boolean(value));
-  const selectedOutputScanners = Array.from(outputScannerSelect.selectedOptions)
-    .map((option) => option.value)
-    .filter((value) => Boolean(value));
-
   const payload = {
     endpoint,
     prompt: promptInput.value,
-    output: outputInput.value,
-    input_scanners: selectedInputScanners,
-    output_scanners: selectedOutputScanners
+    output: outputInput.value
   };
 
   result.textContent = 'Sende Anfrage...';
@@ -426,7 +384,6 @@ sendBtn.addEventListener('click', async () => {
 });
 
 loadEndpoints();
-loadScanners();
 
 function setActiveConfigTab(tabName) {
   activeConfigTab = tabName;
