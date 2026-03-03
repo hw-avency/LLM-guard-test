@@ -289,19 +289,38 @@ def load_scanner_names() -> Tuple[List[str], str]:
     except ValueError as exc:
         return [], f"Scanner-Konfiguration ist kein gültiges JSON: {exc}"
 
-    scanner_names: List[str] = []
-    source = payload.get("scanners") if isinstance(payload, dict) else payload
+    def extract_names(source: Any) -> List[str]:
+        names: List[str] = []
 
-    if isinstance(source, list):
-        for entry in source:
-            if isinstance(entry, str):
-                scanner_names.append(entry)
-            elif isinstance(entry, dict):
-                name = entry.get("name")
-                if isinstance(name, str) and name.strip():
-                    scanner_names.append(name.strip())
-    elif isinstance(source, dict):
-        scanner_names.extend([key for key in source.keys() if isinstance(key, str) and key.strip()])
+        if isinstance(source, list):
+            for entry in source:
+                if isinstance(entry, str) and entry.strip():
+                    names.append(entry.strip())
+                    continue
+
+                if isinstance(entry, dict):
+                    for key in ("name", "type"):
+                        value = entry.get(key)
+                        if isinstance(value, str) and value.strip():
+                            names.append(value.strip())
+                            break
+
+        elif isinstance(source, dict):
+            if "input_scanners" in source or "output_scanners" in source:
+                names.extend(extract_names(source.get("input_scanners", [])))
+                names.extend(extract_names(source.get("output_scanners", [])))
+            else:
+                names.extend([key for key in source.keys() if isinstance(key, str) and key.strip()])
+
+        return names
+
+    scanner_names: List[str] = []
+    if isinstance(payload, dict) and isinstance(payload.get("response"), dict):
+        scanner_names.extend(extract_names(payload["response"]))
+    elif isinstance(payload, dict) and "scanners" in payload:
+        scanner_names.extend(extract_names(payload.get("scanners")))
+    else:
+        scanner_names.extend(extract_names(payload))
 
     unique_sorted_names = sorted(set(scanner_names))
     return unique_sorted_names, ""
