@@ -26,6 +26,8 @@
     .result-grid { display: grid; gap: .65rem; }
     .result-row { padding: .5rem .65rem; border: 1px solid #7775; border-radius: .5rem; background: #00000008; }
     .result-row strong { display: inline-block; min-width: 220px; }
+    .scanner-status-row { display: flex; justify-content: space-between; align-items: baseline; gap: .75rem; flex-wrap: wrap; }
+    .scanner-status-line { white-space: nowrap; }
     .compare-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin-top: .45rem; }
     .compare-column { border: 1px solid #7775; border-radius: .45rem; padding: .5rem; background: #00000008; }
     .highlight-box { white-space: pre-wrap; word-break: break-word; line-height: 1.45; }
@@ -248,7 +250,7 @@ function formatHighlightedText(originalText, sanitizedText) {
 }
 
 function formatResultView(data, debug, durationMs, mode) {
-  const response = data?.response || {};
+  const response = normalizeResponsePayload(data?.response || {});
   const requestBody = debug?.request?.json_body || {};
   const configuredScanners = mode === 'output' ? cachedOutputScanners : cachedPromptScanners;
 
@@ -303,11 +305,10 @@ function formatResultView(data, debug, durationMs, mode) {
   const scannerStatusSection = scannerStatuses.length
     ? scannerStatuses.map((scanner) => `
       <div class="result-row">
-        <strong>${escapeHtml(scanner.name)}</strong>
-        <div>
-          <span class="${scanner.triggered ? 'bad' : 'ok'}"><strong>${scanner.triggered ? 'Positiv / Aktion nötig' : 'Negativ / Keine Aktion nötig'}</strong></span>
-          <br>
-          <small class="muted">Score: <code>${escapeHtml(scanner.scoreLabel)}</code> · Threshold: <code>${escapeHtml(scanner.thresholdLabel)}</code></small>
+        <div class="scanner-status-row">
+          <strong>${escapeHtml(scanner.name)}</strong>
+          <span class="scanner-status-line ${scanner.triggered ? 'bad' : 'ok'}"><strong>${scanner.triggered ? 'Positiv / Aktion nötig' : 'Negativ / Keine Aktion nötig'}</strong></span>
+          <small class="scanner-status-line muted">Score: <code>${escapeHtml(scanner.scoreLabel)}</code> · Threshold: <code>${escapeHtml(scanner.thresholdLabel)}</code></small>
         </div>
       </div>
     `).join('')
@@ -323,7 +324,7 @@ function formatResultView(data, debug, durationMs, mode) {
 }
 
 function collectScannerStatuses(responsePayload, mode, configuredScanners = []) {
-  const response = responsePayload || {};
+  const response = normalizeResponsePayload(responsePayload || {});
   const scannerMap = new Map();
   const thresholdMap = mode === 'output' ? scannerThresholds.output : scannerThresholds.input;
 
@@ -373,6 +374,16 @@ function collectScannerStatuses(responsePayload, mode, configuredScanners = []) 
     if (!container || typeof container !== 'object') return;
 
     for (const [key, value] of Object.entries(container)) {
+      if (typeof value === 'number') {
+        addStatus(key, value, undefined, undefined);
+        continue;
+      }
+
+      if (typeof value === 'boolean') {
+        addStatus(key, undefined, undefined, value);
+        continue;
+      }
+
       if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
       const validState = firstDefined(value.is_valid, value.valid, value.allowed, value.passed);
       const score = parseNumber(firstDefined(
@@ -473,6 +484,35 @@ function normalizeScannerName(value) {
     .replace(/[^a-z0-9]/g, '');
 }
 
+function normalizeResponsePayload(responsePayload) {
+  if (typeof responsePayload === 'string') {
+    try {
+      return JSON.parse(responsePayload);
+    } catch (_error) {
+      return { raw: responsePayload };
+    }
+  }
+
+  if (!responsePayload || typeof responsePayload !== 'object') {
+    return {};
+  }
+
+  for (const key of ['text', 'raw', 'response']) {
+    const candidate = responsePayload[key];
+    if (typeof candidate !== 'string') continue;
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === 'object') {
+        return parsed;
+      }
+    } catch (_error) {
+      // ignore non-json strings
+    }
+  }
+
+  return responsePayload;
+}
+
 function scannerTriggered(scanner, configuredThreshold) {
   if (!scanner || typeof scanner !== 'object') return false;
 
@@ -512,7 +552,7 @@ function scannerTriggered(scanner, configuredThreshold) {
 }
 
 function collectTriggeredScanners(responsePayload, mode, debugPayload = {}) {
-  const response = responsePayload || {};
+  const response = normalizeResponsePayload(responsePayload || {});
   const triggeredInput = new Set();
   const triggeredOutput = new Set();
 
@@ -707,6 +747,7 @@ async function sendAnalyzeRequest(endpoint, textValue, resultElement) {
     delete data.debug;
 
     const mode = endpoint.toLowerCase().includes('/analyze/output') ? 'output' : 'prompt';
+    data.response = normalizeResponsePayload(data.response);
     const scannerHits = collectTriggeredScanners(data.response, mode, debug);
     applyScannerHighlights(scannerHits.triggeredInput, scannerHits.triggeredOutput);
 
