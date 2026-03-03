@@ -6,7 +6,7 @@
   <title>LLM Guard API Client</title>
   <style>
     :root { color-scheme: light dark; }
-    body { font-family: system-ui, sans-serif; margin: 0; padding: 2rem; max-width: 900px; margin-inline: auto; }
+    body { font-family: system-ui, sans-serif; margin: 0; padding: 2rem; max-width: 1100px; margin-inline: auto; }
     h1 { margin-top: 0; }
     .card { border: 1px solid #6664; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; }
     .row { display: grid; gap: .75rem; }
@@ -34,6 +34,12 @@
     .legend-swatch { width: .9rem; height: .9rem; border-radius: .2rem; display: inline-block; }
     .legend-swatch-critical { background: color-mix(in srgb, #d23f3f 35%, transparent); border: 1px solid #d23f3f80; }
     .legend-swatch-inserted { background: color-mix(in srgb, #2e8b57 25%, transparent); border: 1px solid #2e8b5780; }
+    .dual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+    .scanner-list { margin: 0; padding-left: 1.1rem; }
+    .scanner-list li { margin: .2rem 0; }
+    @media (max-width: 800px) {
+      .dual-grid { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -46,15 +52,31 @@
   </div>
 
   <div class="card row">
-    <label for="endpoint">Endpoint (relativ zu API_URL)</label>
-    <select id="endpoint">
-      <option value="/analyze/prompt">/analyze/prompt (Standard)</option>
-    </select>
+    <div class="dual-grid">
+      <div class="row">
+        <h2 style="margin: 0;">Prompt</h2>
+        <div>
+          <strong>Aktive Prompt-Scanner:</strong>
+          <ul id="promptScanners" class="scanner-list">
+            <li class="muted">Lade Scanner…</li>
+          </ul>
+        </div>
+        <textarea id="promptInput" placeholder="Gib hier den Prompt ein">Hello from Cloud Run</textarea>
+        <button id="sendPrompt" type="button">Prompt abschicken</button>
+      </div>
 
-    <label for="textInput" id="textInputLabel">Prompt oder Answer</label>
-    <textarea id="textInput" placeholder="Gib hier den zu prüfenden Text ein">Hello from Cloud Run</textarea>
-
-    <button id="send">Request senden</button>
+      <div class="row">
+        <h2 style="margin: 0;">Output</h2>
+        <div>
+          <strong>Aktive Output-Scanner:</strong>
+          <ul id="outputScanners" class="scanner-list">
+            <li class="muted">Lade Scanner…</li>
+          </ul>
+        </div>
+        <textarea id="outputInput" placeholder="Gib hier den Output ein"></textarea>
+        <button id="sendOutput" type="button">Output abschicken</button>
+      </div>
+    </div>
   </div>
 
   <div class="card">
@@ -85,52 +107,25 @@
   </div>
 
 <script>
-const sendBtn = document.getElementById('send');
+const sendPromptBtn = document.getElementById('sendPrompt');
+const sendOutputBtn = document.getElementById('sendOutput');
 const result = document.getElementById('result');
 const debugResult = document.getElementById('debugResult');
-const endpointSelect = document.getElementById('endpoint');
-const textInput = document.getElementById('textInput');
-const textInputLabel = document.getElementById('textInputLabel');
+const promptInput = document.getElementById('promptInput');
+const outputInput = document.getElementById('outputInput');
+const promptScannersList = document.getElementById('promptScanners');
+const outputScannersList = document.getElementById('outputScanners');
 const toggleConfigBtn = document.getElementById('toggleConfig');
 const configPanel = document.getElementById('configPanel');
 const configResult = document.getElementById('configResult');
 const reloadConfigBtn = document.getElementById('reloadConfig');
 const configTabButtons = Array.from(document.querySelectorAll('[data-config-tab]'));
 
-const endpointExamples = {
-  '/analyze/prompt': {
-    text: 'Hello from Cloud Run'
-  }
-};
-
-function inferBodyKey(endpoint) {
-  return String(endpoint || '').toLowerCase().startsWith('/analyze/output') ? 'output' : 'prompt';
-}
-
-function updateTextFieldUi(endpoint) {
-  const bodyKey = inferBodyKey(endpoint);
-  if (bodyKey === 'output') {
-    textInputLabel.textContent = 'Answer';
-    textInput.placeholder = 'Gib hier den Answer/Output ein';
-    return;
-  }
-
-  textInputLabel.textContent = 'Prompt';
-  textInput.placeholder = 'Gib hier den Prompt ein';
-}
-
 const configRoutes = {
   scanners: '/api/config/scanners'
 };
 
 let activeConfigTab = 'scanners';
-
-function setFieldsFromEndpoint(endpoint) {
-  const example = endpointExamples[endpoint];
-  updateTextFieldUi(endpoint);
-  if (!example) return;
-  textInput.value = typeof example.text === 'string' ? example.text : '';
-}
 
 function firstDefined(...values) {
   for (const value of values) {
@@ -326,49 +321,39 @@ function formatResultView(data, debug) {
   `;
 }
 
-async function loadEndpoints() {
+function renderScannerList(element, scanners) {
+  const names = Array.isArray(scanners) ? scanners : [];
+  if (names.length === 0) {
+    element.innerHTML = '<li class="muted">Keine aktiven Scanner gefunden.</li>';
+    return;
+  }
+
+  element.innerHTML = names
+    .map((name) => `<li><code>${escapeHtml(name)}</code></li>`)
+    .join('');
+}
+
+async function loadActiveScanners() {
   try {
-    const res = await fetch('/api/endpoints');
+    const res = await fetch('/api/scanners/available');
     if (!res.ok) {
       const payload = await res.json();
-      throw new Error(payload.error || 'Endpoint-Liste konnte nicht geladen werden.');
+      throw new Error(payload.error || 'Scanner-Liste konnte nicht geladen werden.');
     }
 
     const data = await res.json();
-    const endpoints = Array.isArray(data.endpoints) ? data.endpoints : [];
-    if (endpoints.length === 0) return;
-
-    endpointSelect.innerHTML = '';
-
-    for (const endpoint of endpoints) {
-      const option = document.createElement('option');
-      option.value = endpoint.path;
-      option.textContent = endpoint.summary
-        ? `${endpoint.path} – ${endpoint.summary}`
-        : endpoint.path;
-      endpointSelect.appendChild(option);
-
-      endpointExamples[endpoint.path] = {
-        text: endpoint.example_body?.prompt || endpoint.example_body?.output || ''
-      };
-    }
-
-    setFieldsFromEndpoint(endpointSelect.value);
+    renderScannerList(promptScannersList, data.input_scanners);
+    renderScannerList(outputScannersList, data.output_scanners);
   } catch (e) {
-    result.textContent = 'Hinweis: ' + e.message;
+    promptScannersList.innerHTML = `<li class="warn">${escapeHtml(e.message)}</li>`;
+    outputScannersList.innerHTML = `<li class="warn">${escapeHtml(e.message)}</li>`;
   }
 }
 
-endpointSelect.addEventListener('change', (event) => {
-  setFieldsFromEndpoint(event.target.value);
-});
-
-sendBtn.addEventListener('click', async () => {
-  const endpoint = endpointSelect.value.trim();
-
+async function sendAnalyzeRequest(endpoint, textValue) {
   const payload = {
     endpoint,
-    text: textInput.value
+    text: textValue
   };
 
   result.textContent = 'Sende Anfrage...';
@@ -391,9 +376,17 @@ sendBtn.addEventListener('click', async () => {
     result.textContent = 'Fehler: ' + e.message;
     debugResult.textContent = 'Fehler: ' + e.message;
   }
+}
+
+sendPromptBtn.addEventListener('click', async () => {
+  await sendAnalyzeRequest('/analyze/prompt', promptInput.value);
 });
 
-loadEndpoints();
+sendOutputBtn.addEventListener('click', async () => {
+  await sendAnalyzeRequest('/analyze/output', outputInput.value);
+});
+
+loadActiveScanners();
 
 function setActiveConfigTab(tabName) {
   activeConfigTab = tabName;
