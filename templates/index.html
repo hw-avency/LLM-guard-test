@@ -43,10 +43,16 @@
   "prompt": "Hello from Cloud Run"
 }</textarea>
 
-    <div>
-      <label for="scannerSelect">Scanner auswählen (optional)</label>
-      <select id="scannerSelect" multiple size="8"></select>
-      <small class="muted">Mit Strg/Cmd-Klick mehrere auswählen. Die Auswahl wird als <code>scanners</code> im Request-Body übergeben.</small>
+    <div class="row">
+      <div>
+        <label for="inputScannerSelect">Input-Scanner auswählen (optional)</label>
+        <select id="inputScannerSelect" multiple size="6"></select>
+      </div>
+      <div>
+        <label for="outputScannerSelect">Output-Scanner auswählen (optional)</label>
+        <select id="outputScannerSelect" multiple size="6"></select>
+      </div>
+      <small class="muted">Mit Strg/Cmd-Klick mehrere auswählen. Die Auswahl wird als <code>input_scanners</code> bzw. <code>output_scanners</code> im Request-Body übergeben.</small>
     </div>
 
     <button id="send">Request senden</button>
@@ -77,7 +83,8 @@ const sendBtn = document.getElementById('send');
 const result = document.getElementById('result');
 const endpointSelect = document.getElementById('endpoint');
 const bodyInput = document.getElementById('body');
-const scannerSelect = document.getElementById('scannerSelect');
+const inputScannerSelect = document.getElementById('inputScannerSelect');
+const outputScannerSelect = document.getElementById('outputScannerSelect');
 const toggleConfigBtn = document.getElementById('toggleConfig');
 const configPanel = document.getElementById('configPanel');
 const configResult = document.getElementById('configResult');
@@ -139,7 +146,30 @@ async function loadEndpoints() {
 }
 
 async function loadScanners() {
-  scannerSelect.innerHTML = '';
+  inputScannerSelect.innerHTML = '';
+  outputScannerSelect.innerHTML = '';
+
+  const addPlaceholder = (select, message) => {
+    const option = document.createElement('option');
+    option.disabled = true;
+    option.textContent = message;
+    select.appendChild(option);
+  };
+
+  const addOptions = (select, scanners, emptyMessage) => {
+    if (!Array.isArray(scanners) || scanners.length === 0) {
+      addPlaceholder(select, emptyMessage);
+      return;
+    }
+
+    for (const scanner of scanners) {
+      const option = document.createElement('option');
+      option.value = scanner;
+      option.textContent = scanner;
+      select.appendChild(option);
+    }
+  };
+
   try {
     const res = await fetch('/api/scanners/available');
     const data = await res.json();
@@ -148,26 +178,11 @@ async function loadScanners() {
       throw new Error(data.error || 'Scanner konnten nicht geladen werden.');
     }
 
-    const scanners = Array.isArray(data.scanners) ? data.scanners : [];
-    if (scanners.length === 0) {
-      const option = document.createElement('option');
-      option.disabled = true;
-      option.textContent = 'Keine Scanner gefunden';
-      scannerSelect.appendChild(option);
-      return;
-    }
-
-    for (const scanner of scanners) {
-      const option = document.createElement('option');
-      option.value = scanner;
-      option.textContent = scanner;
-      scannerSelect.appendChild(option);
-    }
+    addOptions(inputScannerSelect, data.input_scanners, 'Keine Input-Scanner gefunden');
+    addOptions(outputScannerSelect, data.output_scanners, 'Keine Output-Scanner gefunden');
   } catch (e) {
-    const option = document.createElement('option');
-    option.disabled = true;
-    option.textContent = 'Fehler: ' + e.message;
-    scannerSelect.appendChild(option);
+    addPlaceholder(inputScannerSelect, 'Fehler: ' + e.message);
+    addPlaceholder(outputScannerSelect, 'Fehler: ' + e.message);
   }
 }
 
@@ -186,15 +201,20 @@ sendBtn.addEventListener('click', async () => {
     return;
   }
 
-  const selectedScanners = Array.from(scannerSelect.selectedOptions)
+  const selectedInputScanners = Array.from(inputScannerSelect.selectedOptions)
+    .map((option) => option.value)
+    .filter((value) => Boolean(value));
+  const selectedOutputScanners = Array.from(outputScannerSelect.selectedOptions)
     .map((option) => option.value)
     .filter((value) => Boolean(value));
 
-  if (selectedScanners.length > 0) {
-    body.scanners = selectedScanners;
-  } else if (body.scanners) {
-    delete body.scanners;
-  }
+  if (selectedInputScanners.length > 0) body.input_scanners = selectedInputScanners;
+  else delete body.input_scanners;
+
+  if (selectedOutputScanners.length > 0) body.output_scanners = selectedOutputScanners;
+  else delete body.output_scanners;
+
+  delete body.scanners;
 
   result.textContent = 'Sende Anfrage...';
 
