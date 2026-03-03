@@ -227,6 +227,41 @@ def forward_to_upstream(endpoint: str, body: Dict[str, Any]) -> Tuple[Any, int]:
     ), response.status_code
 
 
+def get_upstream_config(endpoint: str) -> Tuple[Any, int]:
+    config = get_config()
+    if not config["api_url"]:
+        return jsonify({"error": "API_URL ist nicht gesetzt."}), 500
+    if not config["auth_token"]:
+        return jsonify({"error": "AUTH_TOKEN ist nicht gesetzt."}), 500
+
+    try:
+        timeout_seconds = int(config["upstream_timeout_seconds"])
+    except ValueError:
+        return jsonify({"error": "UPSTREAM_TIMEOUT_SECONDS muss eine Ganzzahl sein."}), 500
+
+    if timeout_seconds <= 0:
+        return jsonify({"error": "UPSTREAM_TIMEOUT_SECONDS muss > 0 sein."}), 500
+
+    target_url = f"{config['api_url'].rstrip('/')}{endpoint}"
+    headers = {"Authorization": f"Bearer {config['auth_token']}"}
+
+    try:
+        response = requests.get(target_url, headers=headers, timeout=timeout_seconds)
+    except requests.RequestException as exc:
+        return jsonify({"error": "Konfiguration konnte nicht geladen werden.", "detail": str(exc)}), 502
+
+    content_type = response.headers.get("Content-Type", "")
+    if "application/json" in content_type:
+        try:
+            data = response.json()
+        except json.JSONDecodeError:
+            data = {"raw": response.text}
+    else:
+        data = {"raw": response.text}
+
+    return jsonify({"status_code": response.status_code, "target_url": target_url, "response": data}), response.status_code
+
+
 @app.get("/")
 def index() -> str:
     config = get_config()
@@ -255,6 +290,11 @@ def list_endpoints() -> Any:
     if error:
         return jsonify({"error": error}), 502
     return jsonify({"endpoints": endpoints})
+
+
+@app.get("/api/debug/scanners")
+def get_debug_scanners() -> Any:
+    return get_upstream_config(endpoint="/debug/scanners")
 
 
 @app.post("/analyze/prompt")
