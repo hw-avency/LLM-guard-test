@@ -42,8 +42,24 @@
     .legend-swatch-inserted { background: #d9f5e6; border: 1px solid #2e8b57; }
     .dual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
     .column-stack { align-content: start; }
+    .column-stack > h2,
+    .column-stack > .scanner-panel,
+    .column-stack > textarea,
+    .column-stack > button,
+    .column-stack > div {
+      margin: 0;
+    }
     .column-stack pre { min-height: 150px; max-height: 210px; }
-    .scanner-panel { max-height: 70px; overflow-y: auto; border: 1px solid #7775; border-radius: .4rem; padding: 2px 6px; background: #00000008; }
+    .scanner-panel {
+      min-height: 70px;
+      max-height: 70px;
+      overflow-y: auto;
+      border: 1px solid #7775;
+      border-radius: .4rem;
+      padding: 2px 6px;
+      background: #00000008;
+      box-sizing: border-box;
+    }
     .scanner-list { margin: 1px 0; padding-left: .9rem; }
     .scanner-list li { margin: 0; line-height: 1.2; }
     .scanner-list li { display: flex; align-items: center; gap: .4rem; }
@@ -143,6 +159,8 @@ let activeConfigTab = 'scanners';
 let cachedPromptScanners = [];
 let cachedOutputScanners = [];
 let scannerThresholds = { input: new Map(), output: new Map() };
+let lastTriggeredPromptScanners = new Set();
+let lastTriggeredOutputScanners = new Set();
 
 function firstDefined(...values) {
   for (const value of values) {
@@ -692,9 +710,11 @@ function buildTriggeredSet(scannerStatuses = []) {
   return triggered;
 }
 
-function applyScannerHighlights(triggeredInput = new Set(), triggeredOutput = new Set()) {
-  renderScannerList(promptScannersList, cachedPromptScanners, triggeredInput);
-  renderScannerList(outputScannersList, cachedOutputScanners, triggeredOutput);
+function applyScannerHighlights(triggeredInput = lastTriggeredPromptScanners, triggeredOutput = lastTriggeredOutputScanners) {
+  lastTriggeredPromptScanners = triggeredInput;
+  lastTriggeredOutputScanners = triggeredOutput;
+  renderScannerList(promptScannersList, cachedPromptScanners, lastTriggeredPromptScanners);
+  renderScannerList(outputScannersList, cachedOutputScanners, lastTriggeredOutputScanners);
 
 }
 
@@ -806,9 +826,9 @@ async function sendAnalyzeRequest(endpoint, textValue, resultElement) {
     });
 
     if (mode === 'output') {
-      applyScannerHighlights(new Set(), buildTriggeredSet(scannerStatuses));
+      applyScannerHighlights(lastTriggeredPromptScanners, buildTriggeredSet(scannerStatuses));
     } else {
-      applyScannerHighlights(buildTriggeredSet(scannerStatuses), new Set());
+      applyScannerHighlights(buildTriggeredSet(scannerStatuses), lastTriggeredOutputScanners);
     }
 
     resultElement.innerHTML = formatResultView(data, debug, durationMs, mode);
