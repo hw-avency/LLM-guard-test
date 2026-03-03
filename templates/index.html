@@ -41,10 +41,12 @@
     .dual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
     .column-stack { align-content: start; }
     .column-stack pre { min-height: 220px; }
-    .scanner-panel { min-height: 130px; max-height: 130px; overflow-y: auto; border: 1px solid #7775; border-radius: .45rem; padding: .45rem .55rem; background: #00000008; }
-    .scanner-list { margin: 0; padding-left: 1.1rem; }
-    .scanner-list li { margin: .2rem 0; }
+    .scanner-panel { max-height: 130px; overflow-y: auto; border: 1px solid #7775; border-radius: .45rem; padding: 4px 8px; background: #00000008; }
+    .scanner-list { margin: 4px 0; padding-left: 1rem; }
+    .scanner-list li { margin: 1px 0; }
     .scanner-list li { display: flex; align-items: center; gap: .4rem; }
+    .scanner-list li.hit { background: #ffd7d766; border-radius: .25rem; }
+    .scanner-list li.hit code { color: #b22f2f; font-weight: 700; }
     .scanner-dot { width: .65rem; height: .65rem; border-radius: 50%; display: inline-block; }
     .scanner-dot.hit { background: #d23f3f; }
     .scanner-dot.ok { background: #2e8b57; }
@@ -340,6 +342,9 @@ function collectScannerStatuses(responsePayload, mode, configuredScanners = []) 
   function evaluateScanner(score, threshold, fallbackStatus) {
     if (score !== undefined && threshold !== undefined) {
       return score >= threshold;
+    }
+    if (score !== undefined) {
+      return score > 0;
     }
     if (fallbackStatus === true) return false;
     if (fallbackStatus === false) return true;
@@ -646,9 +651,19 @@ function renderScannerList(element, scanners, triggeredSet = new Set()) {
     .map((name) => {
       const isTriggered = triggeredSet.has(normalizeScannerName(name));
       const markerClass = isTriggered ? 'hit' : 'ok';
-      return `<li><span class="scanner-dot ${markerClass}" title="${isTriggered ? 'Treffer' : 'Kein Treffer'}"></span><code>${escapeHtml(name)}</code></li>`;
+      return `<li class="${isTriggered ? 'hit' : 'ok'}"><span class="scanner-dot ${markerClass}" title="${isTriggered ? 'Treffer' : 'Kein Treffer'}"></span><code>${escapeHtml(name)}</code></li>`;
     })
     .join('');
+}
+
+function buildTriggeredSet(scannerStatuses = []) {
+  const triggered = new Set();
+  for (const scanner of scannerStatuses) {
+    if (scanner?.triggered) {
+      triggered.add(normalizeScannerName(scanner.name));
+    }
+  }
+  return triggered;
 }
 
 function applyScannerHighlights(triggeredInput = new Set(), triggeredOutput = new Set()) {
@@ -748,8 +763,14 @@ async function sendAnalyzeRequest(endpoint, textValue, resultElement) {
 
     const mode = endpoint.toLowerCase().includes('/analyze/output') ? 'output' : 'prompt';
     data.response = normalizeResponsePayload(data.response);
-    const scannerHits = collectTriggeredScanners(data.response, mode, debug);
-    applyScannerHighlights(scannerHits.triggeredInput, scannerHits.triggeredOutput);
+    const configuredScanners = mode === 'output' ? cachedOutputScanners : cachedPromptScanners;
+    const scannerStatuses = collectScannerStatuses(data.response, mode, configuredScanners);
+
+    if (mode === 'output') {
+      applyScannerHighlights(new Set(), buildTriggeredSet(scannerStatuses));
+    } else {
+      applyScannerHighlights(buildTriggeredSet(scannerStatuses), new Set());
+    }
 
     resultElement.innerHTML = formatResultView(data, debug, durationMs, mode);
     debugResult.textContent = JSON.stringify(debug, null, 2);
