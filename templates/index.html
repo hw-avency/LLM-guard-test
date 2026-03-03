@@ -382,10 +382,22 @@ function scannerTriggered(scanner) {
   return false;
 }
 
-function collectTriggeredScanners(responsePayload, mode) {
+function collectTriggeredScanners(responsePayload, mode, debugPayload = {}) {
   const response = responsePayload || {};
   const triggeredInput = new Set();
   const triggeredOutput = new Set();
+
+  function addTriggeredByNameHints(targetSet, names, originalText, sanitizedText) {
+    if (String(originalText ?? '') === String(sanitizedText ?? '')) return;
+
+    for (const scannerName of names) {
+      const normalized = normalizeScannerName(scannerName);
+      if (!normalized) continue;
+      if (normalized.includes('anonymize') || normalized.includes('deanonymize')) {
+        targetSet.add(normalized);
+      }
+    }
+  }
 
   function addTriggeredScanner(name, target) {
     const normalized = normalizeScannerName(name);
@@ -452,6 +464,28 @@ function collectTriggeredScanners(responsePayload, mode) {
   }
 
   walk(response, '', mode);
+
+  const requestPayload = debugPayload?.request?.json_body || {};
+  const responsePayloadData = response || {};
+
+  const rawPrompt = firstDefined(requestPayload.prompt, responsePayloadData.prompt, '');
+  const sanitizedPrompt = firstDefined(
+    responsePayloadData.sanitized_prompt,
+    responsePayloadData.prompt_sanitized,
+    responsePayloadData.prompt,
+    ''
+  );
+
+  const rawOutput = firstDefined(requestPayload.output, responsePayloadData.output, '');
+  const sanitizedOutput = firstDefined(
+    responsePayloadData.sanitized_output,
+    responsePayloadData.output_sanitized,
+    responsePayloadData.output,
+    ''
+  );
+
+  addTriggeredByNameHints(triggeredInput, cachedPromptScanners, rawPrompt, sanitizedPrompt);
+  addTriggeredByNameHints(triggeredOutput, cachedOutputScanners, rawOutput, sanitizedOutput);
 
   return { triggeredInput, triggeredOutput };
 }
@@ -537,7 +571,7 @@ async function sendAnalyzeRequest(endpoint, textValue, resultElement) {
     delete data.debug;
 
     const mode = endpoint.toLowerCase().includes('/analyze/output') ? 'output' : 'prompt';
-    const scannerHits = collectTriggeredScanners(data.response, mode);
+    const scannerHits = collectTriggeredScanners(data.response, mode, debug);
     applyScannerHighlights(scannerHits.triggeredInput, scannerHits.triggeredOutput);
 
     resultElement.innerHTML = formatResultView(data, debug, durationMs, mode);
