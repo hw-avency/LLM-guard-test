@@ -292,9 +292,14 @@ def list_endpoints() -> Any:
     return jsonify({"endpoints": endpoints})
 
 
-@app.get("/api/debug/scanners")
-def get_debug_scanners() -> Any:
-    return get_upstream_config(endpoint="/debug/scanners")
+@app.get("/api/config")
+def get_config_root() -> Any:
+    return get_upstream_config(endpoint="/config/")
+
+
+@app.get("/api/config/scanners")
+def get_config_scanners() -> Any:
+    return get_upstream_config(endpoint="/config/scanners")
 
 
 @app.post("/analyze/prompt")
