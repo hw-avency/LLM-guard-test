@@ -65,8 +65,7 @@
 
     <div id="configPanel" style="display: none; margin-top: .75rem;">
       <div class="inline">
-        <button class="tab-button active" data-config-tab="root" type="button">GET /config/</button>
-        <button class="tab-button" data-config-tab="scanners" type="button">GET /config/scanners</button>
+        <button class="tab-button active" data-config-tab="scanners" type="button">GET /debug/scanners</button>
         <button id="reloadConfig" type="button">Neu laden</button>
       </div>
       <pre id="configResult" style="margin-top: .75rem;">Noch nicht geladen.</pre>
@@ -92,11 +91,10 @@ let endpointExamples = {
 };
 
 const configRoutes = {
-  root: '/api/config',
   scanners: '/api/config/scanners'
 };
 
-let activeConfigTab = 'root';
+let activeConfigTab = 'scanners';
 
 function setBodyFromEndpoint(endpoint) {
   const example = endpointExamples[endpoint];
@@ -227,7 +225,7 @@ function setActiveConfigTab(tabName) {
 async function loadConfig() {
   configResult.textContent = 'Lade Konfiguration...';
   try {
-    const route = configRoutes[activeConfigTab] || configRoutes.root;
+    const route = configRoutes[activeConfigTab] || configRoutes.scanners;
     const res = await fetch(route);
     const data = await res.json();
     configResult.textContent = JSON.stringify(data, null, 2);

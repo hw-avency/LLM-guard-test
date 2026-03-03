@@ -277,7 +277,7 @@ def load_scanner_names() -> Tuple[List[str], str]:
     if timeout_seconds <= 0:
         return [], "UPSTREAM_TIMEOUT_SECONDS muss > 0 sein."
 
-    target_url = f"{config['api_url'].rstrip('/')}/config/scanners"
+    target_url = f"{config['api_url'].rstrip('/')}/debug/scanners"
     headers = {"Authorization": f"Bearer {config['auth_token']}"}
 
     try:
@@ -339,12 +339,12 @@ def list_endpoints() -> Any:
 
 @app.get("/api/config")
 def get_config_root() -> Any:
-    return get_upstream_config(endpoint="/config/")
+    return get_upstream_config(endpoint="/debug/scanners")
 
 
 @app.get("/api/config/scanners")
 def get_config_scanners() -> Any:
-    return get_upstream_config(endpoint="/config/scanners")
+    return get_upstream_config(endpoint="/debug/scanners")
 
 
 @app.get("/api/scanners/available")
