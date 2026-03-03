@@ -8,6 +8,19 @@ from flask import Flask, jsonify, render_template, request
 app = Flask(__name__)
 
 
+def mask_sensitive_headers(headers: Dict[str, Any]) -> Dict[str, Any]:
+    masked_headers: Dict[str, Any] = {}
+    for key, value in headers.items():
+        if key.lower() == "authorization" and isinstance(value, str):
+            if value.lower().startswith("bearer "):
+                masked_headers[key] = "Bearer ********"
+            else:
+                masked_headers[key] = "********"
+            continue
+        masked_headers[key] = value
+    return masked_headers
+
+
 def get_config() -> Dict[str, str]:
     api_url = os.getenv("API_URL", "").strip()
     auth_token = os.getenv("AUTH_TOKEN", "").strip()
@@ -270,7 +283,7 @@ def forward_to_upstream(
                 "request": {
                     "method": "POST",
                     "url": prepared_request.url,
-                    "headers": dict(prepared_request.headers),
+                    "headers": mask_sensitive_headers(dict(prepared_request.headers)),
                     "json_body": body,
                 },
                 "response": {
