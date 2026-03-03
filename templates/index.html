@@ -37,6 +37,8 @@
     .legend-swatch-critical { background: color-mix(in srgb, #d23f3f 35%, transparent); border: 1px solid #d23f3f80; }
     .legend-swatch-inserted { background: color-mix(in srgb, #2e8b57 25%, transparent); border: 1px solid #2e8b5780; }
     .dual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+    .column-stack { align-content: start; }
+    .column-stack pre { min-height: 220px; }
     .scanner-list { margin: 0; padding-left: 1.1rem; }
     .scanner-list li { margin: .2rem 0; }
     .scanner-list li.scanner-hit {
@@ -66,7 +68,7 @@
 
   <div class="card row">
     <div class="dual-grid">
-      <div class="row">
+      <div class="row column-stack">
         <h2 style="margin: 0;">Prompt</h2>
         <div>
           <strong>Aktive Prompt-Scanner:</strong>
@@ -76,9 +78,13 @@
         </div>
         <textarea id="promptInput" placeholder="Gib hier den Prompt ein">Hello from Cloud Run</textarea>
         <button id="sendPrompt" type="button">Prompt abschicken</button>
+        <div>
+          <strong>Prompt-Antwort:</strong>
+          <pre id="promptResult">Noch keine Prompt-Anfrage gesendet.</pre>
+        </div>
       </div>
 
-      <div class="row">
+      <div class="row column-stack">
         <h2 style="margin: 0;">Output</h2>
         <div>
           <strong>Aktive Output-Scanner:</strong>
@@ -88,13 +94,12 @@
         </div>
         <textarea id="outputInput" placeholder="Gib hier den Output ein"></textarea>
         <button id="sendOutput" type="button">Output abschicken</button>
+        <div>
+          <strong>Output-Antwort:</strong>
+          <pre id="outputResult">Noch keine Output-Anfrage gesendet.</pre>
+        </div>
       </div>
     </div>
-  </div>
-
-  <div class="card">
-    <h2>Antwort</h2>
-    <pre id="result">Noch keine Anfrage gesendet.</pre>
   </div>
 
   <div class="card">
@@ -122,7 +127,8 @@
 <script>
 const sendPromptBtn = document.getElementById('sendPrompt');
 const sendOutputBtn = document.getElementById('sendOutput');
-const result = document.getElementById('result');
+const promptResult = document.getElementById('promptResult');
+const outputResult = document.getElementById('outputResult');
 const debugResult = document.getElementById('debugResult');
 const promptInput = document.getElementById('promptInput');
 const outputInput = document.getElementById('outputInput');
@@ -250,7 +256,7 @@ function formatHighlightedText(originalText, sanitizedText) {
   };
 }
 
-function formatResultView(data, debug) {
+function formatResultView(data, debug, durationMs) {
   const response = data?.response || {};
   const scanners = asList(response?.scanners);
   const requestBody = debug?.request?.json_body || {};
@@ -305,6 +311,7 @@ function formatResultView(data, debug) {
   return `
     <div class="result-grid">
       <div class="result-row"><strong>Statuscode</strong> <code>${escapeHtml(data?.status_code ?? '—')}</code></div>
+      <div class="result-row"><strong>Request-Dauer</strong> <code>${escapeHtml(durationMs ?? '—')} ms</code></div>
       <div class="result-row"><strong>Input-Status</strong> ${formatStateLabel(inputState)}</div>
       <div class="result-row"><strong>Output-Status</strong> ${formatOutputStateLabel(outputState, hasOutputScannerResult)}</div>
       <div class="result-row"><strong>Bereinigter Input</strong><br><code>${escapeHtml(sanitizedPrompt ?? '—')}</code></div>
@@ -459,14 +466,15 @@ async function loadActiveScanners() {
   }
 }
 
-async function sendAnalyzeRequest(endpoint, textValue) {
+async function sendAnalyzeRequest(endpoint, textValue, resultElement) {
   const payload = {
     endpoint,
     text: textValue
   };
 
-  result.textContent = 'Sende Anfrage...';
+  resultElement.textContent = 'Sende Anfrage...';
   debugResult.textContent = 'Sende Anfrage...';
+  const startedAt = performance.now();
 
   try {
     const res = await fetch('/api/forward', {
@@ -476,26 +484,27 @@ async function sendAnalyzeRequest(endpoint, textValue) {
     });
 
     const data = await res.json();
+    const durationMs = Math.round(performance.now() - startedAt);
     const debug = data.debug || {};
     delete data.debug;
 
     const scannerHits = collectTriggeredScanners(data.response);
     applyScannerHighlights(scannerHits.triggeredInput, scannerHits.triggeredOutput);
 
-    result.innerHTML = formatResultView(data, debug);
+    resultElement.innerHTML = formatResultView(data, debug, durationMs);
     debugResult.textContent = JSON.stringify(debug, null, 2);
   } catch (e) {
-    result.textContent = 'Fehler: ' + e.message;
+    resultElement.textContent = 'Fehler: ' + e.message;
     debugResult.textContent = 'Fehler: ' + e.message;
   }
 }
 
 sendPromptBtn.addEventListener('click', async () => {
-  await sendAnalyzeRequest('/analyze/prompt', promptInput.value);
+  await sendAnalyzeRequest('/analyze/prompt', promptInput.value, promptResult);
 });
 
 sendOutputBtn.addEventListener('click', async () => {
-  await sendAnalyzeRequest('/analyze/output', outputInput.value);
+  await sendAnalyzeRequest('/analyze/output', outputInput.value, outputResult);
 });
 
 loadActiveScanners();
