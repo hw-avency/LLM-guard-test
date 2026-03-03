@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, List, Tuple
 
 import requests
 from flask import Flask, jsonify, render_template, request
@@ -12,11 +12,114 @@ def get_config() -> Dict[str, str]:
     api_url = os.getenv("API_URL", "").strip()
     auth_token = os.getenv("AUTH_TOKEN", "").strip()
     upstream_timeout_seconds = os.getenv("UPSTREAM_TIMEOUT_SECONDS", "120").strip()
+    openapi_spec_url = os.getenv(
+        "OPENAPI_SPEC_URL",
+        "https://llm-guard-api-813066616888.europe-west3.run.app/openapi.json",
+    ).strip()
     return {
         "api_url": api_url,
         "auth_token": auth_token,
         "upstream_timeout_seconds": upstream_timeout_seconds,
+        "openapi_spec_url": openapi_spec_url,
     }
+
+
+def generate_example_from_schema(schema: Dict[str, Any]) -> Any:
+    schema_type = schema.get("type")
+
+    if "example" in schema:
+        return schema["example"]
+
+    if schema_type == "object":
+        properties = schema.get("properties", {})
+        required = schema.get("required", [])
+        if not properties:
+            return {}
+
+        example_object = {}
+        for key, value in properties.items():
+            if key in required:
+                example_object[key] = generate_example_from_schema(value)
+        if example_object:
+            return example_object
+
+        first_key = next(iter(properties))
+        return {first_key: generate_example_from_schema(properties[first_key])}
+
+    if schema_type == "array":
+        item_schema = schema.get("items", {})
+        return [generate_example_from_schema(item_schema)]
+
+    if schema_type == "integer":
+        return 0
+    if schema_type == "number":
+        return 0.0
+    if schema_type == "boolean":
+        return False
+    return ""
+
+
+def extract_example_body(operation: Dict[str, Any]) -> Dict[str, Any]:
+    request_body = operation.get("requestBody", {})
+    content = request_body.get("content", {})
+    json_content = content.get("application/json", {})
+
+    if "example" in json_content and isinstance(json_content["example"], dict):
+        return json_content["example"]
+
+    examples = json_content.get("examples", {})
+    if isinstance(examples, dict):
+        for entry in examples.values():
+            value = entry.get("value") if isinstance(entry, dict) else None
+            if isinstance(value, dict):
+                return value
+
+    schema = json_content.get("schema", {})
+    if isinstance(schema, dict):
+        generated = generate_example_from_schema(schema)
+        if isinstance(generated, dict):
+            return generated
+
+    return {}
+
+
+def load_available_endpoints() -> Tuple[List[Dict[str, Any]], str]:
+    config = get_config()
+    openapi_url = config["openapi_spec_url"]
+
+    if not openapi_url:
+        return [], "OPENAPI_SPEC_URL ist nicht gesetzt."
+
+    try:
+        response = requests.get(openapi_url, timeout=20)
+        response.raise_for_status()
+        spec = response.json()
+    except requests.RequestException as exc:
+        return [], f"OpenAPI-Spec konnte nicht geladen werden: {exc}"
+    except ValueError as exc:
+        return [], f"OpenAPI-Spec ist kein gültiges JSON: {exc}"
+
+    paths = spec.get("paths", {})
+    endpoints: List[Dict[str, Any]] = []
+
+    for path, path_item in paths.items():
+        if not isinstance(path_item, dict):
+            continue
+        for method_name, operation in path_item.items():
+            if method_name.lower() != "post" or not isinstance(operation, dict):
+                continue
+
+            endpoints.append(
+                {
+                    "method": method_name.upper(),
+                    "path": path,
+                    "summary": operation.get("summary", ""),
+                    "example_body": extract_example_body(operation),
+                }
+            )
+
+    endpoints.sort(key=lambda endpoint: endpoint["path"])
+    return endpoints, ""
 
 
 def forward_to_upstream(endpoint: str, body: Dict[str, Any]) -> Tuple[Any, int]:
@@ -86,6 +189,14 @@ def forward_request() -> Any:
         return jsonify({"error": "body muss ein JSON-Objekt sein."}), 400
 
     return forward_to_upstream(endpoint=endpoint, body=body)
+
+
+@app.get("/api/endpoints")
+def list_endpoints() -> Any:
+    endpoints, error = load_available_endpoints()
+    if error:
+        return jsonify({"error": error}), 502
+    return jsonify({"endpoints": endpoints})
 
 
 @app.post("/analyze/prompt")

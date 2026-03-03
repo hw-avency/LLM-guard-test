@@ -8,9 +8,8 @@ Kleine Flask-Webapp, um eine bestehende `llm-guard` API-Instanz über ein Browse
   - `API_URL` (z. B. `https://deine-llm-guard-api.example.com`)
   - `AUTH_TOKEN` (Bearer Token)
   - `UPSTREAM_TIMEOUT_SECONDS` (optional, Default `120`)
-- Einfaches Webinterface für:
-  - Endpoint-Pfad (Default `/analyze/prompt`)
-  - JSON Request Body
+  - `OPENAPI_SPEC_URL` (optional, Default auf gehostete OpenAPI-URL)
+- Einfaches Webinterface mit Endpoint-Dropdown (aus OpenAPI geladen) und automatisch vorgeschlagenem JSON-Body je Endpoint.
 - Serverseitiger Forward an LLM Guard inkl. `Authorization: Bearer <AUTH_TOKEN>`.
 - Docker-ready für Google Cloud Run.
 - Direkter Kompatibilitäts-Endpoint `POST /analyze/prompt` für Clients, die nicht über `/api/forward` senden.
