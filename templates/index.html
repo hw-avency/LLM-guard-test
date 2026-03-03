@@ -10,7 +10,7 @@
     h1 { margin-top: 0; }
     .card { border: 1px solid #6664; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; }
     .row { display: grid; gap: .75rem; }
-    input, textarea, button { font: inherit; padding: .6rem .75rem; border-radius: .5rem; border: 1px solid #7775; width: 100%; box-sizing: border-box; }
+    input, select, textarea, button { font: inherit; padding: .6rem .75rem; border-radius: .5rem; border: 1px solid #7775; width: 100%; box-sizing: border-box; }
     textarea { min-height: 160px; }
     button { cursor: pointer; font-weight: 600; }
     pre { white-space: pre-wrap; word-break: break-word; background: #0001; border-radius: .5rem; padding: .75rem; }
@@ -30,7 +30,9 @@
 
   <div class="card row">
     <label for="endpoint">Endpoint (relativ zu API_URL)</label>
-    <input id="endpoint" value="/analyze/prompt" />
+    <select id="endpoint">
+      <option value="/analyze/prompt">/analyze/prompt (Standard)</option>
+    </select>
 
     <label for="body">JSON Body</label>
     <textarea id="body">{
@@ -48,13 +50,67 @@
 <script>
 const sendBtn = document.getElementById('send');
 const result = document.getElementById('result');
+const endpointSelect = document.getElementById('endpoint');
+const bodyInput = document.getElementById('body');
+
+let endpointExamples = {
+  '/analyze/prompt': {
+    prompt: 'Hello from Cloud Run'
+  }
+};
+
+function setBodyFromEndpoint(endpoint) {
+  const example = endpointExamples[endpoint];
+  if (!example) {
+    return;
+  }
+  bodyInput.value = JSON.stringify(example, null, 2);
+}
+
+async function loadEndpoints() {
+  try {
+    const res = await fetch('/api/endpoints');
+    if (!res.ok) {
+      const payload = await res.json();
+      throw new Error(payload.error || 'Endpoint-Liste konnte nicht geladen werden.');
+    }
+
+    const data = await res.json();
+    const endpoints = Array.isArray(data.endpoints) ? data.endpoints : [];
+
+    if (endpoints.length === 0) {
+      return;
+    }
+
+    endpointSelect.innerHTML = '';
+
+    for (const endpoint of endpoints) {
+      const option = document.createElement('option');
+      option.value = endpoint.path;
+      option.textContent = endpoint.summary
+        ? `${endpoint.path} – ${endpoint.summary}`
+        : endpoint.path;
+      endpointSelect.appendChild(option);
+
+      endpointExamples[endpoint.path] = endpoint.example_body || {};
+    }
+
+    setBodyFromEndpoint(endpointSelect.value);
+  } catch (e) {
+    result.textContent = 'Hinweis: ' + e.message;
+  }
+}
+
+endpointSelect.addEventListener('change', (event) => {
+  setBodyFromEndpoint(event.target.value);
+});
 
 sendBtn.addEventListener('click', async () => {
-  const endpoint = document.getElementById('endpoint').value.trim();
+  const endpoint = endpointSelect.value.trim();
   let body;
 
   try {
-    body = JSON.parse(document.getElementById('body').value);
+    body = JSON.parse(bodyInput.value);
   } catch (e) {
     result.textContent = 'Ungültiges JSON im Body: ' + e.message;
     return;
@@ -75,6 +131,8 @@ sendBtn.addEventListener('click', async () => {
     result.textContent = 'Fehler: ' + e.message;
   }
 });
+
+loadEndpoints();
 </script>
 </body>
 </html>
