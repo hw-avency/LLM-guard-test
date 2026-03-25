@@ -27,8 +27,6 @@ steps:
       - '--platform'
       - 'managed'
       - '--allow-unauthenticated'
-      - '--update-secrets'
-      - 'API_URL=llm-guard-api-url:latest,AUTH_TOKEN=llm-guard-auth-token:latest'
 
 images:
   - 'gcr.io/$PROJECT_ID/llm-guard-web-client:$COMMIT_SHA'
@@ -36,10 +34,3 @@ images:
 
 options:
   logging: CLOUD_LOGGING_ONLY
-
-availableSecrets:
-  secretManager:
-    - versionName: projects/$PROJECT_ID/secrets/llm-guard-api-url/versions/latest
-      env: 'API_URL'
-    - versionName: projects/$PROJECT_ID/secrets/llm-guard-auth-token/versions/latest
-      env: 'AUTH_TOKEN'
