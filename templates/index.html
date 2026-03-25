@@ -3,911 +3,1135 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VARIOS AI Scanner Playground</title>
+  <title>VARIOS AI · Scanner Playground</title>
   <style>
-    :root { color-scheme: light dark; }
-    body { font-family: system-ui, sans-serif; margin: 0; padding: .75rem; max-width: 1200px; margin-inline: auto; font-size: 14px; line-height: 1.3; }
-    h1 { margin: 0 0 .4rem; font-size: 1.3rem; }
-    h2 { margin: 0; font-size: 1.02rem; }
-    .card { border: 1px solid #6664; border-radius: 8px; padding: .55rem .7rem; margin-bottom: .55rem; }
-    .row { display: grid; gap: .45rem; }
-    .inline { display: flex; gap: .4rem; flex-wrap: wrap; }
-    input, select, textarea, button { font: inherit; padding: .4rem .55rem; border-radius: .45rem; border: 1px solid #7775; width: 100%; box-sizing: border-box; }
-    textarea { min-height: 76px; }
-    button { cursor: pointer; font-weight: 600; }
-    .inline button { width: auto; }
-    .tab-button { opacity: .8; }
-    .tab-button.active { opacity: 1; border-color: #2e8b57; }
-    pre { white-space: pre-wrap; word-break: break-word; background: #0001; border-radius: .45rem; padding: .45rem .55rem; margin: .2rem 0 0; max-height: 240px; overflow: auto; }
-    .response-panel { white-space: normal; word-break: break-word; background: #0001; border-radius: .45rem; padding: .45rem .55rem; margin: .2rem 0 0; }
-    .muted { opacity: .8; }
-    .ok { color: #2e8b57; }
-    .warn { color: #cc7a00; }
-    .bad { color: #d23f3f; }
-    details summary { cursor: pointer; font-weight: 600; }
-    .result-grid { display: grid; gap: .4rem; }
-    .result-row { padding: .28rem .45rem; border: 1px solid #7775; border-radius: .4rem; background: #00000008; }
-    .result-row strong { display: inline-block; min-width: 220px; }
-    .scanner-status-row { display: flex; justify-content: space-between; align-items: center; gap: .4rem .75rem; flex-wrap: wrap; }
-    .scanner-status-line { white-space: nowrap; }
-    .compare-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; margin-top: .3rem; }
-    .compare-column { border: 1px solid #7775; border-radius: .4rem; padding: .35rem .45rem; background: #00000008; }
-    .highlight-box { white-space: pre-wrap; word-break: break-word; line-height: 1.45; }
-    .critical-highlight { background: #ffd7d7; color: #4a1010; border-radius: .2rem; padding: 0 .1rem; font-weight: 600; }
-    .inserted-highlight { background: #d9f5e6; color: #0f3d24; border-radius: .2rem; padding: 0 .1rem; font-weight: 600; }
-    .legend { display: flex; flex-wrap: wrap; gap: .4rem; font-size: .88rem; margin-bottom: .2rem; }
-    .legend-item { display: inline-flex; align-items: center; gap: .3rem; }
-    .legend-swatch { width: .9rem; height: .9rem; border-radius: .2rem; display: inline-block; }
-    .legend-swatch-critical { background: #ffd7d7; border: 1px solid #c44949; }
-    .legend-swatch-inserted { background: #d9f5e6; border: 1px solid #2e8b57; }
-    .dual-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
-    .column-stack { align-content: start; }
-    .column-stack > h2,
-    .column-stack > .scanner-panel,
-    .column-stack > textarea,
-    .column-stack > button,
-    .column-stack > div {
-      margin: 0;
+    /* ── Design Tokens ─────────────────────────────────────────── */
+    :root {
+      --bg:           #071c14;
+      --surface:      #0d2b1e;
+      --surface-2:    #122e20;
+      --surface-3:    #183826;
+      --border:       #1e4a30;
+      --border-light: #2a6040;
+      --accent:       #00d97e;
+      --accent-dim:   #00b868;
+      --accent-glow:  rgba(0, 217, 126, 0.15);
+      --accent-glow2: rgba(0, 217, 126, 0.06);
+      --text:         #e8f5ee;
+      --text-muted:   #7aad8e;
+      --text-dim:     #4a7a5c;
+      --ok:           #00d97e;
+      --warn:         #f5a623;
+      --bad:          #ff5a5a;
+      --ok-bg:        rgba(0, 217, 126, 0.1);
+      --bad-bg:       rgba(255, 90, 90, 0.1);
+      --radius-sm:    6px;
+      --radius:       12px;
+      --radius-lg:    18px;
+      --shadow:       0 4px 24px rgba(0,0,0,0.4);
+      --shadow-sm:    0 2px 8px rgba(0,0,0,0.3);
+      --transition:   0.18s ease;
+      --font:         'Inter', system-ui, -apple-system, sans-serif;
     }
-    .column-stack pre { min-height: 150px; max-height: 210px; }
-    .scanner-panel {
-      min-height: 70px;
-      max-height: 70px;
-      overflow-y: auto;
-      border: 1px solid #7775;
-      border-radius: .4rem;
-      padding: 2px 6px;
-      background: #00000008;
-      box-sizing: border-box;
+
+    /* ── Reset & Base ──────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 14px;
+      line-height: 1.5;
     }
-    .scanner-list { margin: 1px 0; padding-left: .9rem; }
-    .scanner-list li { margin: 0; line-height: 1.2; }
-    .scanner-list li { display: flex; align-items: center; gap: .4rem; }
-    .scanner-list li.hit { background: #ffd7d766; border-radius: .25rem; }
-    .scanner-list li.hit code { color: #b22f2f; font-weight: 700; }
-    .scanner-dot { width: .65rem; height: .65rem; border-radius: 50%; display: inline-block; }
-    .scanner-dot.hit { background: #d23f3f; }
-    .scanner-dot.ok { background: #2e8b57; }
-    @media (max-width: 800px) {
-      .dual-grid { grid-template-columns: 1fr; }
-      .compare-columns { grid-template-columns: 1fr; }
+
+    /* ── Header ────────────────────────────────────────────────── */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(7, 28, 20, 0.92);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
     }
+
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      text-decoration: none;
+    }
+
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+    }
+
+    .logo-mark {
+      width: 32px;
+      height: 32px;
+      background: var(--accent);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .logo-mark svg {
+      width: 18px;
+      height: 18px;
+      fill: var(--bg);
+    }
+
+    .logo-text {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: .02em;
+    }
+
+    .logo-text span {
+      color: var(--accent);
+    }
+
+    .header-badge {
+      display: flex;
+      align-items: center;
+      gap: .4rem;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: .25rem .75rem;
+      font-size: .75rem;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    .header-badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 6px var(--accent);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: .4; }
+    }
+
+    /* ── Layout ────────────────────────────────────────────────── */
+    .main {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 2rem 2rem 4rem;
+    }
+
+    .page-title {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    .page-title h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: .4rem;
+    }
+
+    .page-title p {
+      color: var(--text-muted);
+      font-size: .9rem;
+    }
+
+    .panels-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 900px) {
+      .panels-grid { grid-template-columns: 1fr; }
+      .main { padding: 1.5rem 1rem 3rem; }
+      .header { padding: 0 1rem; }
+    }
+
+    /* ── Panel / Card ──────────────────────────────────────────── */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      transition: border-color var(--transition);
+    }
+
+    .panel:focus-within {
+      border-color: var(--border-light);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 1.25rem .85rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-2);
+    }
+
+    .panel-title-group {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+    }
+
+    .panel-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-sm);
+      background: var(--accent-glow);
+      border: 1px solid rgba(0, 217, 126, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .panel-icon svg {
+      width: 16px;
+      height: 16px;
+      stroke: var(--accent);
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .panel-title {
+      font-size: .95rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .panel-subtitle {
+      font-size: .75rem;
+      color: var(--text-muted);
+      margin-top: .1rem;
+    }
+
+    /* ── Scanner Tags ──────────────────────────────────────────── */
+    .scanner-bar {
+      padding: .7rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-3);
+    }
+
+    .scanner-bar-label {
+      font-size: .7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--text-dim);
+      margin-bottom: .45rem;
+    }
+
+    .scanner-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .35rem;
+      min-height: 24px;
+    }
+
+    .scanner-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: .3rem;
+      padding: .2rem .55rem;
+      border-radius: 20px;
+      font-size: .72rem;
+      font-weight: 500;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      transition: all var(--transition);
+    }
+
+    .scanner-tag.hit {
+      background: var(--bad-bg);
+      border-color: rgba(255, 90, 90, 0.35);
+      color: #ff8a8a;
+    }
+
+    .scanner-tag.ok {
+      background: var(--ok-bg);
+      border-color: rgba(0, 217, 126, 0.3);
+      color: var(--accent);
+    }
+
+    .scanner-tag-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+      flex-shrink: 0;
+    }
+
+    .scanner-tag.loading {
+      animation: shimmer 1.4s infinite;
+    }
+
+    @keyframes shimmer {
+      0%, 100% { opacity: .5; }
+      50% { opacity: 1; }
+    }
+
+    /* ── Input Area ────────────────────────────────────────────── */
+    .input-area {
+      padding: 1rem 1.25rem;
+      flex: 1;
+    }
+
+    .chat-textarea {
+      width: 100%;
+      min-height: 140px;
+      background: var(--surface-3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: .875rem;
+      line-height: 1.6;
+      padding: .85rem 1rem;
+      resize: vertical;
+      outline: none;
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+
+    .chat-textarea::placeholder {
+      color: var(--text-dim);
+    }
+
+    .chat-textarea:focus {
+      border-color: var(--accent-dim);
+      box-shadow: 0 0 0 3px var(--accent-glow2);
+    }
+
+    /* ── Send Button ───────────────────────────────────────────── */
+    .panel-footer {
+      padding: .75rem 1.25rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: .75rem;
+    }
+
+    .btn-send {
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .6rem 1.25rem;
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      border-radius: var(--radius);
+      font-family: var(--font);
+      font-size: .875rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background var(--transition), transform var(--transition), box-shadow var(--transition);
+      box-shadow: 0 2px 12px rgba(0, 217, 126, 0.3);
+    }
+
+    .btn-send:hover {
+      background: #00f090;
+      box-shadow: 0 4px 20px rgba(0, 217, 126, 0.45);
+      transform: translateY(-1px);
+    }
+
+    .btn-send:active {
+      transform: translateY(0);
+    }
+
+    .btn-send:disabled {
+      opacity: .5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-send svg {
+      width: 15px;
+      height: 15px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .btn-send.loading svg {
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ── Result Area ───────────────────────────────────────────── */
+    .result-area {
+      border-top: 1px solid var(--border);
+      background: var(--surface-2);
+    }
+
+    .result-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .7rem 1.25rem .5rem;
+    }
+
+    .result-header-label {
+      font-size: .7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--text-dim);
+    }
+
+    .result-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: .35rem;
+      padding: .18rem .6rem;
+      border-radius: 20px;
+      font-size: .72rem;
+      font-weight: 600;
+    }
+
+    .result-status-badge.ok {
+      background: var(--ok-bg);
+      color: var(--ok);
+      border: 1px solid rgba(0, 217, 126, 0.25);
+    }
+
+    .result-status-badge.bad {
+      background: var(--bad-bg);
+      color: var(--bad);
+      border: 1px solid rgba(255, 90, 90, 0.25);
+    }
+
+    .result-status-badge.warn {
+      background: rgba(245, 166, 35, 0.1);
+      color: var(--warn);
+      border: 1px solid rgba(245, 166, 35, 0.25);
+    }
+
+    .result-status-badge .dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .result-content {
+      padding: 0 1.25rem 1.25rem;
+    }
+
+    .result-empty {
+      color: var(--text-dim);
+      font-size: .85rem;
+      font-style: italic;
+      padding: .25rem 0 .5rem;
+    }
+
+    /* ── Result Cards ──────────────────────────────────────────── */
+    .result-grid {
+      display: flex;
+      flex-direction: column;
+      gap: .6rem;
+    }
+
+    .result-card {
+      background: var(--surface-3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .result-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .55rem .85rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .result-card-title {
+      font-size: .8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .result-card-body {
+      padding: .65rem .85rem;
+    }
+
+    .meta-row {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      font-size: .8rem;
+      color: var(--text-muted);
+    }
+
+    .meta-row code {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: .1rem .4rem;
+      font-size: .78rem;
+      color: var(--accent);
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+
+    /* ── Scanner Status Rows ───────────────────────────────────── */
+    .scanner-status-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .5rem;
+      flex-wrap: wrap;
+    }
+
+    .scanner-status-name {
+      font-size: .82rem;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .scanner-status-right {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+    }
+
+    .scanner-status-meta {
+      font-size: .72rem;
+      color: var(--text-dim);
+    }
+
+    .scanner-status-meta code {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: .05rem .3rem;
+      font-size: .7rem;
+      color: var(--text-muted);
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: .3rem;
+      padding: .18rem .55rem;
+      border-radius: 20px;
+      font-size: .7rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .status-pill.ok {
+      background: var(--ok-bg);
+      color: var(--ok);
+      border: 1px solid rgba(0, 217, 126, 0.2);
+    }
+
+    .status-pill.bad {
+      background: var(--bad-bg);
+      color: var(--bad);
+      border: 1px solid rgba(255, 90, 90, 0.2);
+    }
+
+    /* ── Diff Highlight ────────────────────────────────────────── */
+    .diff-columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: .6rem;
+      margin-top: .4rem;
+    }
+
+    .diff-col {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: .6rem .75rem;
+    }
+
+    .diff-col-label {
+      font-size: .68rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--text-dim);
+      margin-bottom: .4rem;
+    }
+
+    .diff-text {
+      font-size: .82rem;
+      line-height: 1.6;
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .critical-highlight {
+      background: rgba(255, 90, 90, 0.2);
+      color: #ff8a8a;
+      border-radius: 3px;
+      padding: 0 .15rem;
+      font-weight: 600;
+    }
+
+    .inserted-highlight {
+      background: rgba(0, 217, 126, 0.15);
+      color: var(--accent);
+      border-radius: 3px;
+      padding: 0 .15rem;
+      font-weight: 600;
+    }
+
+    /* ── Divider in result card ────────────────────────────────── */
+    .result-divider {
+      height: 1px;
+      background: var(--border);
+      margin: .5rem 0;
+    }
+
+    /* ── Scrollbar ─────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
   </style>
 </head>
 <body>
-    <h1>VARIOS AI Scanner Playground</h1>
 
-  <div class="card row">
-    <div class="dual-grid">
-      <div class="row column-stack">
-        <h2>Prompt</h2>
-        <div class="scanner-panel">
-          <strong>Aktive Prompt-Scanner:</strong>
-          <ul id="promptScanners" class="scanner-list">
-            <li class="muted">Lade Scanner…</li>
-          </ul>
+  <!-- ── Header ─────────────────────────────────────────────────── -->
+  <header class="header">
+    <div class="header-brand">
+      <div class="header-logo">
+        <div class="logo-mark">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L3 7v10l9 5 9-5V7L12 2z"/>
+          </svg>
         </div>
-        <textarea id="promptInput" placeholder="Gib hier den Prompt ein">Hello from Cloud Run</textarea>
-        <button id="sendPrompt" type="button">Prompt abschicken</button>
-        <div>
-          <strong>Prompt-Antwort:</strong>
-          <div id="promptResult" class="response-panel">Noch keine Prompt-Anfrage gesendet.</div>
+        <span class="logo-text">VARIOS <span>AI</span></span>
+      </div>
+    </div>
+    <div class="header-badge">
+      <span class="header-badge-dot"></span>
+      Scanner Playground
+    </div>
+  </header>
+
+  <!-- ── Main ───────────────────────────────────────────────────── -->
+  <main class="main">
+
+    <div class="page-title">
+      <h1>LLM Guard · Scanner Playground</h1>
+      <p>Teste Prompt- und Output-Inhalte gegen die aktiven Sicherheits-Scanner</p>
+    </div>
+
+    <div class="panels-grid">
+
+      <!-- ── Prompt Panel ──────────────────────────────────────── -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <div class="panel-icon">
+              <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            </div>
+            <div>
+              <div class="panel-title">Prompt Scanner</div>
+              <div class="panel-subtitle">Analysiert Eingaben auf Bedrohungen</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="scanner-bar">
+          <div class="scanner-bar-label">Aktive Scanner</div>
+          <div class="scanner-tags" id="promptScannerTags">
+            <span class="scanner-tag loading">Lade Scanner…</span>
+          </div>
+        </div>
+
+        <div class="input-area">
+          <textarea
+            class="chat-textarea"
+            id="promptInput"
+            placeholder="Gib hier den Prompt ein, der gescannt werden soll…"
+          >Hello from Cloud Run</textarea>
+        </div>
+
+        <div class="panel-footer">
+          <button class="btn-send" id="sendPrompt" type="button">
+            <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            Prompt scannen
+          </button>
+        </div>
+
+        <div class="result-area" id="promptResultArea">
+          <div class="result-header">
+            <span class="result-header-label">Scan-Ergebnis</span>
+            <span id="promptStatusBadge"></span>
+          </div>
+          <div class="result-content">
+            <p class="result-empty" id="promptResultEmpty">Noch keine Anfrage gesendet.</p>
+            <div class="result-grid" id="promptResult" style="display:none;"></div>
+          </div>
         </div>
       </div>
 
-      <div class="row column-stack">
-        <h2>Output</h2>
-        <div class="scanner-panel">
-          <strong>Aktive Output-Scanner:</strong>
-          <ul id="outputScanners" class="scanner-list">
-            <li class="muted">Lade Scanner…</li>
-          </ul>
+      <!-- ── Output Panel ──────────────────────────────────────── -->
+      <div class="panel">
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <div class="panel-icon">
+              <svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            </div>
+            <div>
+              <div class="panel-title">Output Scanner</div>
+              <div class="panel-subtitle">Analysiert KI-Antworten auf Risiken</div>
+            </div>
+          </div>
         </div>
-        <textarea id="outputInput" placeholder="Gib hier den Output ein"></textarea>
-        <button id="sendOutput" type="button">Output abschicken</button>
-        <div>
-          <strong>Output-Antwort:</strong>
-          <div id="outputResult" class="response-panel">Noch keine Output-Anfrage gesendet.</div>
+
+        <div class="scanner-bar">
+          <div class="scanner-bar-label">Aktive Scanner</div>
+          <div class="scanner-tags" id="outputScannerTags">
+            <span class="scanner-tag loading">Lade Scanner…</span>
+          </div>
+        </div>
+
+        <div class="input-area">
+          <textarea
+            class="chat-textarea"
+            id="outputInput"
+            placeholder="Gib hier den KI-Output ein, der gescannt werden soll…"
+          ></textarea>
+        </div>
+
+        <div class="panel-footer">
+          <button class="btn-send" id="sendOutput" type="button">
+            <svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+            Output scannen
+          </button>
+        </div>
+
+        <div class="result-area" id="outputResultArea">
+          <div class="result-header">
+            <span class="result-header-label">Scan-Ergebnis</span>
+            <span id="outputStatusBadge"></span>
+          </div>
+          <div class="result-content">
+            <p class="result-empty" id="outputResultEmpty">Noch keine Anfrage gesendet.</p>
+            <div class="result-grid" id="outputResult" style="display:none;"></div>
+          </div>
         </div>
       </div>
-    </div>
-  </div>
 
-  <div class="card">
-    <details>
-      <summary>Debug (exakte API Request/Response)</summary>
-      <pre id="debugResult" style="margin-top:.75rem;">Noch keine Anfrage gesendet.</pre>
-    </details>
-  </div>
-
-  <div class="card">
-    <div class="inline" style="justify-content: space-between; align-items: center;">
-      <h2 style="margin: 0;">LLM Guard Konfiguration</h2>
-      <button id="toggleConfig" type="button">Konfiguration anzeigen</button>
     </div>
-
-    <div id="configPanel" style="display: none; margin-top: .75rem;">
-      <div class="inline">
-        <button class="tab-button active" data-config-tab="scanners" type="button">GET /debug/scanners</button>
-        <button id="reloadConfig" type="button">Neu laden</button>
-      </div>
-      <pre id="configResult" style="margin-top: .75rem;">Noch nicht geladen.</pre>
-    </div>
-  </div>
+  </main>
 
 <script>
-const sendPromptBtn = document.getElementById('sendPrompt');
-const sendOutputBtn = document.getElementById('sendOutput');
-const promptResult = document.getElementById('promptResult');
-const outputResult = document.getElementById('outputResult');
-const debugResult = document.getElementById('debugResult');
-const promptInput = document.getElementById('promptInput');
-const outputInput = document.getElementById('outputInput');
-const promptScannersList = document.getElementById('promptScanners');
-const outputScannersList = document.getElementById('outputScanners');
-const toggleConfigBtn = document.getElementById('toggleConfig');
-const configPanel = document.getElementById('configPanel');
-const configResult = document.getElementById('configResult');
-const reloadConfigBtn = document.getElementById('reloadConfig');
-const configTabButtons = Array.from(document.querySelectorAll('[data-config-tab]'));
-
-const configRoutes = {
-  scanners: '/api/config/scanners'
-};
-
-let activeConfigTab = 'scanners';
-let cachedPromptScanners = [];
-let cachedOutputScanners = [];
-const DEFAULT_SCANNER_THRESHOLDS = {
-  input: new Map([
-    ['promptinjection', 0.92],
-    ['anonymize', 0.75]
-  ]),
-  output: new Map()
-};
-let scannerThresholds = {
-  input: new Map(DEFAULT_SCANNER_THRESHOLDS.input),
-  output: new Map(DEFAULT_SCANNER_THRESHOLDS.output)
-};
-let lastTriggeredPromptScanners = new Set();
-let lastTriggeredOutputScanners = new Set();
-
+/* ── Helpers ──────────────────────────────────────────────────────── */
 function firstDefined(...values) {
-  for (const value of values) {
-    if (value !== undefined && value !== null) return value;
-  }
+  for (const v of values) { if (v !== undefined && v !== null) return v; }
   return undefined;
 }
 
-function asList(value) {
-  return Array.isArray(value) ? value : [];
+function asList(v) { return Array.isArray(v) ? v : []; }
+
+function escapeHtml(v) {
+  return String(v)
+    .replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;');
+function normalizeScannerName(v) {
+  return String(v||'').trim().toLowerCase().replace(/[^a-z0-9]/g,'');
 }
 
-function formatStateLabel(value) {
-  if (value === true) return '<span class="ok"><strong>Erlaubt</strong></span>';
-  if (value === false) return '<span class="bad"><strong>Nicht erlaubt / Aktion nötig</strong></span>';
-  return '<span class="warn"><strong>Aktion nötig</strong></span>';
-}
+function formatNumber(v) { return v === undefined ? '—' : String(v); }
 
-function tokenizeForDiff(value) {
-  return String(value || '').match(/\s+|[^\s]+/g) || [];
-}
+/* ── State ────────────────────────────────────────────────────────── */
+let cachedPromptScanners = [];
+let cachedOutputScanners = [];
+const DEFAULT_THRESHOLDS = { input: new Map([['promptinjection',0.92],['anonymize',0.75]]), output: new Map() };
+let scannerThresholds = { input: new Map(DEFAULT_THRESHOLDS.input), output: new Map(DEFAULT_THRESHOLDS.output) };
+let lastTriggeredPrompt = new Set();
+let lastTriggeredOutput = new Set();
 
-function buildDiffOps(originalText, sanitizedText) {
-  const originalTokens = tokenizeForDiff(originalText);
-  const sanitizedTokens = tokenizeForDiff(sanitizedText);
-  const rows = originalTokens.length + 1;
-  const cols = sanitizedTokens.length + 1;
-  const dp = Array.from({ length: rows }, () => new Array(cols).fill(0));
+/* ── DOM refs ─────────────────────────────────────────────────────── */
+const promptInput        = document.getElementById('promptInput');
+const outputInput        = document.getElementById('outputInput');
+const sendPromptBtn      = document.getElementById('sendPrompt');
+const sendOutputBtn      = document.getElementById('sendOutput');
+const promptResultEl     = document.getElementById('promptResult');
+const outputResultEl     = document.getElementById('outputResult');
+const promptResultEmpty  = document.getElementById('promptResultEmpty');
+const outputResultEmpty  = document.getElementById('outputResultEmpty');
+const promptStatusBadge  = document.getElementById('promptStatusBadge');
+const outputStatusBadge  = document.getElementById('outputStatusBadge');
+const promptScannerTags  = document.getElementById('promptScannerTags');
+const outputScannerTags  = document.getElementById('outputScannerTags');
 
-  for (let i = 1; i < rows; i += 1) {
-    for (let j = 1; j < cols; j += 1) {
-      if (originalTokens[i - 1] === sanitizedTokens[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1] + 1;
-      } else {
-        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-      }
-    }
+/* ── Scanner Tags Renderer ────────────────────────────────────────── */
+function renderScannerTags(container, names, triggeredSet) {
+  if (!names.length) {
+    container.innerHTML = '<span class="scanner-tag" style="opacity:.5">Keine Scanner gefunden</span>';
+    return;
   }
+  container.innerHTML = names.map(name => {
+    const hit = triggeredSet.has(normalizeScannerName(name));
+    return `<span class="scanner-tag ${hit ? 'hit' : 'ok'}">
+      <span class="scanner-tag-dot"></span>${escapeHtml(name)}
+    </span>`;
+  }).join('');
+}
 
-  const ops = [];
-  let i = originalTokens.length;
-  let j = sanitizedTokens.length;
+/* ── Status Badge ─────────────────────────────────────────────────── */
+function setStatusBadge(el, triggered, durationMs) {
+  if (triggered === null) { el.innerHTML = ''; return; }
+  const cls   = triggered ? 'bad' : 'ok';
+  const label = triggered ? 'Aktion erforderlich' : 'Keine Bedrohung';
+  const dur   = durationMs ? ` · ${durationMs} ms` : '';
+  el.innerHTML = `<span class="result-status-badge ${cls}"><span class="dot"></span>${label}${dur}</span>`;
+}
 
-  while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && originalTokens[i - 1] === sanitizedTokens[j - 1]) {
-      ops.push({ type: 'equal', token: originalTokens[i - 1] });
-      i -= 1;
-      j -= 1;
-      continue;
-    }
+/* ── Diff / Highlight ─────────────────────────────────────────────── */
+function tokenize(v) { return String(v||'').match(/\s+|[^\s]+/g)||[]; }
 
-    if (i > 0 && (j === 0 || dp[i - 1][j] >= dp[i][j - 1])) {
-      ops.push({ type: 'delete', token: originalTokens[i - 1] });
-      i -= 1;
-      continue;
-    }
-
-    if (j > 0) {
-      ops.push({ type: 'insert', token: sanitizedTokens[j - 1] });
-      j -= 1;
-    }
+function buildDiff(orig, san) {
+  const ot = tokenize(orig), st = tokenize(san);
+  const rows = ot.length+1, cols = st.length+1;
+  const dp = Array.from({length:rows},()=>new Array(cols).fill(0));
+  for(let i=1;i<rows;i++) for(let j=1;j<cols;j++)
+    dp[i][j] = ot[i-1]===st[j-1] ? dp[i-1][j-1]+1 : Math.max(dp[i-1][j],dp[i][j-1]);
+  const ops=[]; let i=ot.length, j=st.length;
+  while(i>0||j>0){
+    if(i>0&&j>0&&ot[i-1]===st[j-1]){ops.push({t:'eq',tok:ot[i-1]});i--;j--;continue;}
+    if(i>0&&(j===0||dp[i-1][j]>=dp[i][j-1])){ops.push({t:'del',tok:ot[i-1]});i--;continue;}
+    if(j>0){ops.push({t:'ins',tok:st[j-1]});j--;}
   }
-
   return ops.reverse();
 }
 
-function formatHighlightedText(originalText, sanitizedText) {
-  const normalizedOriginal = String(originalText ?? '');
-  const normalizedSanitized = String(sanitizedText ?? '');
-  const ops = buildDiffOps(normalizedOriginal, normalizedSanitized);
-
-  const originalHtml = ops
-    .filter((op) => op.type !== 'insert')
-    .map((op) => {
-      const escapedToken = escapeHtml(op.token);
-      return op.type === 'delete'
-        ? `<span class="critical-highlight" title="Als kritisch erkannt / entfernt">${escapedToken}</span>`
-        : escapedToken;
-    })
-    .join('');
-
-  const sanitizedHtml = ops
-    .filter((op) => op.type !== 'delete')
-    .map((op) => {
-      const escapedToken = escapeHtml(op.token);
-      return op.type === 'insert'
-        ? `<span class="inserted-highlight" title="Von LLM Guard ergänzt/ersetzt">${escapedToken}</span>`
-        : escapedToken;
-    })
-    .join('');
-
-  return {
-    originalHtml: originalHtml || '—',
-    sanitizedHtml: sanitizedHtml || '—'
-  };
+function highlightDiff(orig, san) {
+  const ops = buildDiff(orig, san);
+  const origHtml = ops.filter(o=>o.t!=='ins').map(o=>
+    o.t==='del'?`<span class="critical-highlight">${escapeHtml(o.tok)}</span>`:escapeHtml(o.tok)
+  ).join('');
+  const sanHtml = ops.filter(o=>o.t!=='del').map(o=>
+    o.t==='ins'?`<span class="inserted-highlight">${escapeHtml(o.tok)}</span>`:escapeHtml(o.tok)
+  ).join('');
+  return { origHtml: origHtml||'—', sanHtml: sanHtml||'—' };
 }
 
-function formatResultView(data, debug, durationMs, mode) {
-  const response = normalizeResponsePayload(data?.response || {});
-  const requestBody = debug?.request?.json_body || {};
-  const configuredScanners = mode === 'output' ? cachedOutputScanners : cachedPromptScanners;
-
-  const sanitizedPrompt = firstDefined(
-    response?.sanitized_prompt,
-    response?.prompt_sanitized,
-    response?.prompt
-  );
-  const sanitizedOutput = firstDefined(
-    response?.sanitized_output,
-    response?.output_sanitized,
-    response?.output
-  );
-
-  const rawPrompt = firstDefined(requestBody?.prompt, response?.prompt, '');
-  const rawOutput = firstDefined(requestBody?.output, response?.output, '');
-  const promptDiff = formatHighlightedText(rawPrompt, sanitizedPrompt);
-  const outputDiff = formatHighlightedText(rawOutput, sanitizedOutput);
-
-  const outputWasSanitized = mode === 'output'
-    && String(rawOutput ?? '') !== String(sanitizedOutput ?? '');
-
-  const scannerStatuses = collectScannerStatuses(response, mode, configuredScanners, {
-    forceTriggeredScanners: outputWasSanitized ? ['Deanonymize'] : [],
-    noScoreScanners: outputWasSanitized ? ['Deanonymize'] : []
-  });
-
-  const promptCriticalSection = `
-      <div class="result-row">
-        <strong>Kritische Stellen im Prompt</strong>
-        <div class="compare-columns">
-          <div class="compare-column">
-            <div><small class="muted">Original</small></div>
-            <div class="highlight-box">${promptDiff.originalHtml}</div>
-          </div>
-          <div class="compare-column">
-            <div><small class="muted">Bereinigt</small></div>
-            <div class="highlight-box">${promptDiff.sanitizedHtml}</div>
-          </div>
-        </div>
-      </div>`;
-
-  const outputCriticalSection = `
-      <div class="result-row">
-        <strong>Kritische Stellen im Output</strong>
-        <div class="compare-columns">
-          <div class="compare-column">
-            <div><small class="muted">Original</small></div>
-            <div class="highlight-box">${outputDiff.originalHtml}</div>
-          </div>
-          <div class="compare-column">
-            <div><small class="muted">Bereinigt</small></div>
-            <div class="highlight-box">${outputDiff.sanitizedHtml}</div>
-          </div>
-        </div>
-      </div>`;
-
-  const criticalSection = mode === 'output' ? outputCriticalSection : promptCriticalSection;
-  const scannerStatusSection = scannerStatuses.length
-    ? scannerStatuses.map((scanner) => `
-      <div class="result-row">
-        <div class="scanner-status-row">
-          <strong>${escapeHtml(scanner.name)}</strong>
-          <span class="scanner-status-line ${scanner.triggered ? 'bad' : 'ok'}"><strong>${scanner.triggered ? 'Positiv / Aktion nötig' : 'Negativ / Keine Aktion nötig'}</strong></span>
-          ${scanner.hideScore
-            ? '<small class="scanner-status-line muted">Regelbasierte Erkennung (Text verändert)</small>'
-            : `<small class="scanner-status-line muted">Score: <code>${escapeHtml(scanner.scoreLabel)}</code> · Threshold: <code>${escapeHtml(scanner.thresholdLabel)}</code></small>`}
-        </div>
-      </div>
-    `).join('')
-    : '<div class="result-row"><strong>Scanner-Status</strong> <span class="muted">Keine Scanner-Statuswerte in der Antwort gefunden.</span></div>';
-
-  return `
-    <div class="result-grid">
-      <div class="result-row"><strong>Request-Dauer</strong> <code>${escapeHtml(durationMs ?? '—')} ms</code></div>
-      ${scannerStatusSection}
-      ${criticalSection}
-    </div>
-  `;
+/* ── Normalize Response ───────────────────────────────────────────── */
+function normalizeResponse(payload) {
+  if (typeof payload === 'string') { try { return JSON.parse(payload); } catch(_){return {raw:payload};} }
+  if (!payload || typeof payload !== 'object') return {};
+  for (const k of ['text','raw','response']) {
+    const c = payload[k];
+    if (typeof c !== 'string') continue;
+    try { const p=JSON.parse(c); if(p&&typeof p==='object') return p; } catch(_){}
+  }
+  return payload;
 }
 
-function collectScannerStatuses(responsePayload, mode, configuredScanners = [], options = {}) {
-  const response = normalizeResponsePayload(responsePayload || {});
+/* ── Scanner Status Collection ────────────────────────────────────── */
+function parseNum(v){ const n=Number(v); return isNaN(n)?undefined:n; }
+
+function evalScanner(score,threshold,fallback){
+  if(score!==undefined&&threshold!==undefined) return score>=threshold;
+  if(score!==undefined) return score>0;
+  if(fallback===false) return true;
+  return false;
+}
+
+function collectScannerStatuses(responsePayload, mode, configuredScanners=[], opts={}) {
+  const response = normalizeResponse(responsePayload||{});
+  const thresholdMap = mode==='output' ? scannerThresholds.output : scannerThresholds.input;
+  const forceTriggered = new Set(asList(opts.forceTriggeredScanners).map(normalizeScannerName));
+  const hideScore = new Set(asList(opts.noScoreScanners).map(normalizeScannerName));
   const scannerMap = new Map();
-  const thresholdMap = mode === 'output' ? scannerThresholds.output : scannerThresholds.input;
-  const forceTriggered = new Set(asList(options.forceTriggeredScanners).map((name) => normalizeScannerName(name)));
-  const hideScore = new Set(asList(options.noScoreScanners).map((name) => normalizeScannerName(name)));
 
-  function parseNumber(value) {
-    const asNumber = Number(value);
-    return Number.isNaN(asNumber) ? undefined : asNumber;
+  function addStatus(name, score, threshold, state, overrides={}) {
+    if(typeof name!=='string'||!name.trim()) return;
+    const norm = normalizeScannerName(name);
+    if(!norm) return;
+    const cur = scannerMap.get(norm)||{name:name.trim()};
+    const rs = score??cur.score;
+    const rt = threshold??thresholdMap.get(norm);
+    const rstate = state??cur.status;
+    const forced = overrides.forceTriggered||forceTriggered.has(norm);
+    const triggered = forced||evalScanner(rs,rt,rstate);
+    scannerMap.set(norm,{name:cur.name||name.trim(),score:rs,threshold:rt,status:rstate,triggered,hideScore:overrides.hideScore||hideScore.has(norm)});
   }
 
-  function formatNumber(value) {
-    return value === undefined ? '—' : String(value);
-  }
+  for(const n of configuredScanners) if(typeof n==='string'&&n.trim()) addStatus(n,undefined,thresholdMap.get(normalizeScannerName(n)),undefined);
 
-  function evaluateScanner(score, threshold, fallbackStatus) {
-    if (score !== undefined && threshold !== undefined) {
-      return score >= threshold;
-    }
-    if (score !== undefined) {
-      return score > 0;
-    }
-    if (fallbackStatus === true) return false;
-    if (fallbackStatus === false) return true;
-    return false;
-  }
-
-  function addStatus(name, score, threshold, state, overrides = {}) {
-    if (typeof name !== 'string' || !name.trim()) return;
-    const normalizedName = normalizeScannerName(name);
-    if (!normalizedName) return;
-
-    const current = scannerMap.get(normalizedName) || { name: name.trim() };
-    const resolvedScore = score ?? current.score;
-    const resolvedThreshold = threshold ?? thresholdMap.get(normalizedName);
-    const resolvedState = state ?? current.status;
-    const forcedTriggered = overrides.forceTriggered || forceTriggered.has(normalizedName);
-    const triggered = forcedTriggered || evaluateScanner(resolvedScore, resolvedThreshold, resolvedState);
-    scannerMap.set(normalizedName, {
-      name: current.name || name.trim(),
-      score: resolvedScore,
-      threshold: resolvedThreshold,
-      status: resolvedState,
-      triggered,
-      hideScore: overrides.hideScore || hideScore.has(normalizedName)
-    });
-  }
-
-  for (const scannerName of configuredScanners) {
-    if (typeof scannerName !== 'string' || !scannerName.trim()) continue;
-    addStatus(scannerName, undefined, thresholdMap.get(normalizeScannerName(scannerName)), undefined);
-  }
-
-  function collectFromContainer(container, fallbackTarget) {
-    if (!container || typeof container !== 'object') return;
-
-    for (const [key, value] of Object.entries(container)) {
-      if (typeof value === 'number') {
-        addStatus(key, value, undefined, undefined);
-        continue;
-      }
-
-      if (typeof value === 'boolean') {
-        addStatus(key, undefined, undefined, value);
-        continue;
-      }
-
-      if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
-      const validState = firstDefined(value.is_valid, value.valid, value.allowed, value.passed);
-      const score = parseNumber(firstDefined(
-        value.score,
-        value.value,
-        value.probability,
-        value.risk,
-        value.risk_score,
-        value.confidence
-      ));
-      const threshold = parseNumber(firstDefined(
-        value.threshold,
-        value.configured_threshold,
-        value.current_threshold,
-        value.threshold_current,
-        value.config?.threshold
-      ));
-
-      const scannerName = firstDefined(value.name, value.scanner, value.type, value.id, key);
-      if (validState === true || validState === false || score !== undefined || threshold !== undefined) {
-        addStatus(scannerName, score, threshold, validState);
-      }
-
-      const nestedTarget = value.target || value.mode || fallbackTarget;
-      if (nestedTarget && typeof nestedTarget === 'string') {
-        const targetKey = nestedTarget.toLowerCase();
-        if (targetKey.includes('output')) addStatus(scannerName, score, threshold, validState);
-      }
+  function collectFromContainer(container){
+    if(!container||typeof container!=='object') return;
+    for(const [k,v] of Object.entries(container)){
+      if(typeof v==='number'){addStatus(k,v,undefined,undefined);continue;}
+      if(typeof v==='boolean'){addStatus(k,undefined,undefined,v);continue;}
+      if(!v||typeof v!=='object'||Array.isArray(v)) continue;
+      const vs=firstDefined(v.is_valid,v.valid,v.allowed,v.passed);
+      const sc=parseNum(firstDefined(v.score,v.value,v.probability,v.risk,v.risk_score,v.confidence));
+      const th=parseNum(firstDefined(v.threshold,v.configured_threshold,v.current_threshold,v.threshold_current,v.config?.threshold));
+      const sn=firstDefined(v.name,v.scanner,v.type,v.id,k);
+      if(vs===true||vs===false||sc!==undefined||th!==undefined) addStatus(sn,sc,th,vs);
     }
   }
 
-  const directScannerContainers = [
-    response.input_scanners,
-    response.output_scanners,
-    response.scanners,
-    response.results,
-    response.details,
-    response.scanner_results
-  ];
+  for(const c of [response.input_scanners,response.output_scanners,response.scanners,response.results,response.details,response.scanner_results])
+    collectFromContainer(c);
 
-  for (const container of directScannerContainers) {
-    collectFromContainer(container, mode);
+  function walk(node,keyHint=''){
+    if(!node||typeof node!=='object') return;
+    if(Array.isArray(node)){for(const e of node) walk(e,keyHint);return;}
+    const ownState=firstDefined(node.is_valid,node.valid,node.allowed,node.passed);
+    const ownScore=parseNum(firstDefined(node.score,node.value,node.probability,node.risk,node.risk_score,node.confidence));
+    const ownThreshold=parseNum(firstDefined(node.threshold,node.configured_threshold,node.current_threshold,node.threshold_current,node.config?.threshold));
+    const ownName=firstDefined(node.scanner,node.name,node.type,node.id,keyHint);
+    if((ownState===true||ownState===false)&&typeof ownName==='string') addStatus(ownName,ownScore,ownThreshold,ownState);
+    else if((ownScore!==undefined||ownThreshold!==undefined)&&typeof ownName==='string') addStatus(ownName,ownScore,ownThreshold,ownState);
+    for(const [nk,nv] of Object.entries(node)) walk(nv,nk);
   }
-
-  function walk(node, keyHint = '') {
-    if (!node || typeof node !== 'object') return;
-
-    if (Array.isArray(node)) {
-      for (const entry of node) {
-        walk(entry, keyHint);
-      }
-      return;
-    }
-
-    const ownState = firstDefined(node.is_valid, node.valid, node.allowed, node.passed);
-    const ownScore = parseNumber(firstDefined(
-      node.score,
-      node.value,
-      node.probability,
-      node.risk,
-      node.risk_score,
-      node.confidence
-    ));
-    const ownThreshold = parseNumber(firstDefined(
-      node.threshold,
-      node.configured_threshold,
-      node.current_threshold,
-      node.threshold_current,
-      node.config?.threshold
-    ));
-    const ownName = firstDefined(node.scanner, node.name, node.type, node.id, keyHint);
-    if ((ownState === true || ownState === false) && typeof ownName === 'string') {
-      addStatus(ownName, ownScore, ownThreshold, ownState);
-    } else if ((ownScore !== undefined || ownThreshold !== undefined) && typeof ownName === 'string') {
-      addStatus(ownName, ownScore, ownThreshold, ownState);
-    }
-
-    for (const [nestedKey, nestedValue] of Object.entries(node)) {
-      walk(nestedValue, nestedKey);
-    }
-  }
-
   walk(response);
 
-  for (const normalizedName of forceTriggered) {
-    if (!normalizedName) continue;
-    const existing = scannerMap.get(normalizedName);
-    if (existing) {
-      scannerMap.set(normalizedName, {
-        ...existing,
-        triggered: true,
-        hideScore: existing.hideScore || hideScore.has(normalizedName)
-      });
-    } else {
-      const fallbackName = asList(options.forceTriggeredScanners).find(
-        (entry) => normalizeScannerName(entry) === normalizedName
-      ) || normalizedName;
-      addStatus(fallbackName, undefined, undefined, false, { forceTriggered: true, hideScore: hideScore.has(normalizedName) });
+  for(const nn of forceTriggered){
+    if(!nn) continue;
+    const ex=scannerMap.get(nn);
+    if(ex) scannerMap.set(nn,{...ex,triggered:true,hideScore:ex.hideScore||hideScore.has(nn)});
+    else{
+      const fb=asList(opts.forceTriggeredScanners).find(e=>normalizeScannerName(e)===nn)||nn;
+      addStatus(fb,undefined,undefined,false,{forceTriggered:true,hideScore:hideScore.has(nn)});
     }
   }
 
   return Array.from(scannerMap.entries())
-    .sort(([, a], [, b]) => a.name.localeCompare(b.name))
-    .map(([, scanner]) => ({
-      ...scanner,
-      scoreLabel: scanner.hideScore ? '—' : formatNumber(scanner.score),
-      thresholdLabel: scanner.hideScore ? '—' : formatNumber(scanner.threshold)
-    }));
+    .sort(([,a],[,b])=>a.name.localeCompare(b.name))
+    .map(([,s])=>({...s,scoreLabel:s.hideScore?'—':formatNumber(s.score),thresholdLabel:s.hideScore?'—':formatNumber(s.threshold)}));
 }
 
-function normalizeScannerName(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '');
+/* ── Triggered Scanners ───────────────────────────────────────────── */
+function buildTriggeredSet(statuses=[]) {
+  const s=new Set();
+  for(const sc of statuses) if(sc?.triggered) s.add(normalizeScannerName(sc.name));
+  return s;
 }
 
-function normalizeResponsePayload(responsePayload) {
-  if (typeof responsePayload === 'string') {
-    try {
-      return JSON.parse(responsePayload);
-    } catch (_error) {
-      return { raw: responsePayload };
-    }
-  }
-
-  if (!responsePayload || typeof responsePayload !== 'object') {
-    return {};
-  }
-
-  for (const key of ['text', 'raw', 'response']) {
-    const candidate = responsePayload[key];
-    if (typeof candidate !== 'string') continue;
-    try {
-      const parsed = JSON.parse(candidate);
-      if (parsed && typeof parsed === 'object') {
-        return parsed;
-      }
-    } catch (_error) {
-      // ignore non-json strings
-    }
-  }
-
-  return responsePayload;
+function applyScannerHighlights(ti=lastTriggeredPrompt, to=lastTriggeredOutput) {
+  lastTriggeredPrompt = ti;
+  lastTriggeredOutput = to;
+  renderScannerTags(promptScannerTags, cachedPromptScanners, lastTriggeredPrompt);
+  renderScannerTags(outputScannerTags, cachedOutputScanners, lastTriggeredOutput);
 }
 
-function scannerTriggered(scanner, configuredThreshold) {
-  if (!scanner || typeof scanner !== 'object') return false;
+/* ── Format Result View ───────────────────────────────────────────── */
+function formatResultView(data, debug, durationMs, mode) {
+  const response = normalizeResponse(data?.response||{});
+  const requestBody = debug?.request?.json_body||{};
+  const configuredScanners = mode==='output' ? cachedOutputScanners : cachedPromptScanners;
 
-  const explicitDetected = firstDefined(
-    scanner.detected,
-    scanner.matched,
-    scanner.match,
-    scanner.has_issue,
-    scanner.flagged,
-    scanner.triggered
-  );
+  const sanitizedPrompt = firstDefined(response?.sanitized_prompt,response?.prompt_sanitized,response?.prompt);
+  const sanitizedOutput = firstDefined(response?.sanitized_output,response?.output_sanitized,response?.output);
+  const rawPrompt = firstDefined(requestBody?.prompt,response?.prompt,'');
+  const rawOutput = firstDefined(requestBody?.output,response?.output,'');
+  const outputWasSanitized = mode==='output' && String(rawOutput??'')!==String(sanitizedOutput??'');
 
-  if (explicitDetected === true) return true;
+  const scannerStatuses = collectScannerStatuses(response, mode, configuredScanners, {
+    forceTriggeredScanners: outputWasSanitized?['Deanonymize']:[],
+    noScoreScanners: outputWasSanitized?['Deanonymize']:[]
+  });
 
-  const validState = firstDefined(scanner.is_valid, scanner.valid, scanner.allowed);
-  if (validState === false) return true;
+  const anyTriggered = scannerStatuses.some(s=>s.triggered);
 
-  const score = Number(firstDefined(
-    scanner.score,
-    scanner.value,
-    scanner.probability,
-    scanner.risk,
-    scanner.risk_score,
-    scanner.confidence
-  ));
-  const threshold = Number(firstDefined(
-    scanner.threshold,
-    scanner.configured_threshold,
-    scanner.current_threshold,
-    scanner.threshold_current,
-    scanner.config?.threshold,
-    configuredThreshold
-  ));
+  /* Scanner Status Cards */
+  const scannerHtml = scannerStatuses.length
+    ? scannerStatuses.map(sc => `
+      <div class="result-card">
+        <div class="result-card-body">
+          <div class="scanner-status-item">
+            <span class="scanner-status-name">${escapeHtml(sc.name)}</span>
+            <div class="scanner-status-right">
+              ${sc.hideScore
+                ? '<span class="scanner-status-meta">Regelbasierte Erkennung</span>'
+                : `<span class="scanner-status-meta">Score: <code>${escapeHtml(sc.scoreLabel)}</code> · Threshold: <code>${escapeHtml(sc.thresholdLabel)}</code></span>`}
+              <span class="status-pill ${sc.triggered?'bad':'ok'}">${sc.triggered?'Positiv':'Negativ'}</span>
+            </div>
+          </div>
+        </div>
+      </div>`).join('')
+    : `<div class="result-card"><div class="result-card-body"><span class="scanner-status-meta">Keine Scanner-Statuswerte in der Antwort gefunden.</span></div></div>`;
 
-  if (!Number.isNaN(score) && !Number.isNaN(threshold) && score >= threshold) return true;
-  return false;
+  /* Diff Section */
+  const origText  = mode==='output' ? rawOutput  : rawPrompt;
+  const sanText   = mode==='output' ? sanitizedOutput : sanitizedPrompt;
+  const diff = highlightDiff(origText, sanText);
+  const diffLabel = mode==='output' ? 'Kritische Stellen im Output' : 'Kritische Stellen im Prompt';
+  const diffHtml = `
+    <div class="result-card">
+      <div class="result-card-header">
+        <span class="result-card-title">${diffLabel}</span>
+      </div>
+      <div class="result-card-body">
+        <div class="diff-columns">
+          <div class="diff-col">
+            <div class="diff-col-label">Original</div>
+            <div class="diff-text">${diff.origHtml}</div>
+          </div>
+          <div class="diff-col">
+            <div class="diff-col-label">Bereinigt</div>
+            <div class="diff-text">${diff.sanHtml}</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  return { html: `<div class="result-grid">${scannerHtml}${diffHtml}</div>`, anyTriggered };
 }
 
-function collectTriggeredScanners(responsePayload, mode, debugPayload = {}) {
-  const response = normalizeResponsePayload(responsePayload || {});
-  const triggeredInput = new Set();
-  const triggeredOutput = new Set();
-
-  function addTriggeredScanner(name, target) {
-    const normalized = normalizeScannerName(name);
-    if (!normalized) return;
-
-    const targetString = String(target || '').toLowerCase();
-    if (targetString.includes('output')) {
-      triggeredOutput.add(normalized);
-      return;
-    }
-    if (targetString.includes('input') || targetString.includes('prompt')) {
-      triggeredInput.add(normalized);
-      return;
-    }
-    if (mode === 'output') {
-      triggeredOutput.add(normalized);
-    } else if (mode === 'prompt') {
-      triggeredInput.add(normalized);
-    } else {
-      triggeredInput.add(normalized);
-      triggeredOutput.add(normalized);
-    }
-  }
-
-  function looksLikeScannerResult(candidate) {
-    if (!candidate || typeof candidate !== 'object') return false;
-    return ['score', 'risk', 'risk_score', 'threshold', 'is_valid', 'valid', 'allowed', 'detected', 'triggered'].some((key) => key in candidate);
-  }
-
-  function walk(value, keyHint = '', targetHint = '') {
-    if (Array.isArray(value)) {
-      for (const item of value) walk(item, keyHint, targetHint);
-      return;
-    }
-
-    if (!value || typeof value !== 'object') return;
-
-    const scannerName = firstDefined(
-      value.name,
-      value.scanner,
-      value.type,
-      value.id,
-      keyHint && keyHint.toLowerCase().includes('scanner') ? keyHint : undefined,
-      looksLikeScannerResult(value) ? keyHint : undefined
-    );
-    const target = firstDefined(value.target, value.stage, value.kind, targetHint);
-
-    const normalized = normalizeScannerName(scannerName);
-    const thresholdForScanner = target === 'output'
-      ? scannerThresholds.output.get(normalized)
-      : scannerThresholds.input.get(normalized);
-
-    if (scannerName && scannerTriggered(value, thresholdForScanner)) {
-      addTriggeredScanner(scannerName, target);
-    }
-
-    for (const [nestedKey, nestedValue] of Object.entries(value)) {
-      const nestedTarget = nestedKey.toLowerCase().includes('output')
-        ? 'output'
-        : nestedKey.toLowerCase().includes('input') || nestedKey.toLowerCase().includes('prompt')
-          ? 'input'
-          : target;
-
-      const nestedThreshold = nestedTarget === 'output'
-        ? scannerThresholds.output.get(normalizeScannerName(nestedKey))
-        : scannerThresholds.input.get(normalizeScannerName(nestedKey));
-
-      if (looksLikeScannerResult(nestedValue) && scannerTriggered(nestedValue, nestedThreshold)) {
-        addTriggeredScanner(nestedKey, nestedTarget);
-      }
-
-      walk(nestedValue, nestedKey, nestedTarget);
-    }
-  }
-
-  walk(response, '', mode);
-
-  return { triggeredInput, triggeredOutput };
-}
-
-function renderScannerList(element, scanners, triggeredSet = new Set()) {
-  const names = Array.isArray(scanners) ? scanners : [];
-  if (names.length === 0) {
-    element.innerHTML = '<li class="muted">Keine aktiven Scanner gefunden.</li>';
-    return;
-  }
-
-  element.innerHTML = names
-    .map((name) => {
-      const isTriggered = triggeredSet.has(normalizeScannerName(name));
-      const markerClass = isTriggered ? 'hit' : 'ok';
-      return `<li class="${isTriggered ? 'hit' : 'ok'}"><span class="scanner-dot ${markerClass}" title="${isTriggered ? 'Treffer' : 'Kein Treffer'}"></span><code>${escapeHtml(name)}</code></li>`;
-    })
-    .join('');
-}
-
-function buildTriggeredSet(scannerStatuses = []) {
-  const triggered = new Set();
-  for (const scanner of scannerStatuses) {
-    if (scanner?.triggered) {
-      triggered.add(normalizeScannerName(scanner.name));
-    }
-  }
-  return triggered;
-}
-
-function applyScannerHighlights(triggeredInput = lastTriggeredPromptScanners, triggeredOutput = lastTriggeredOutputScanners) {
-  lastTriggeredPromptScanners = triggeredInput;
-  lastTriggeredOutputScanners = triggeredOutput;
-  renderScannerList(promptScannersList, cachedPromptScanners, lastTriggeredPromptScanners);
-  renderScannerList(outputScannersList, cachedOutputScanners, lastTriggeredOutputScanners);
-
-}
-
-function extractThresholdEntries(node, targetHint = 'input', out = { input: new Map(), output: new Map() }) {
-  if (!node || typeof node !== 'object') return out;
-
-  if (Array.isArray(node)) {
-    for (const item of node) extractThresholdEntries(item, targetHint, out);
-    return out;
-  }
-
-  const possibleName = firstDefined(node.name, node.scanner, node.type);
-  const threshold = Number(firstDefined(node.threshold, node.config?.threshold));
-  if (typeof possibleName === 'string' && possibleName.trim() && !Number.isNaN(threshold)) {
-    const normalized = normalizeScannerName(possibleName);
-    const target = String(firstDefined(node.target, node.stage, targetHint)).toLowerCase();
-    if (target.includes('output')) out.output.set(normalized, threshold);
-    else out.input.set(normalized, threshold);
-  }
-
-  for (const [key, value] of Object.entries(node)) {
-    let nestedHint = targetHint;
-    const normalizedKey = key.toLowerCase();
-    if (normalizedKey.includes('output')) nestedHint = 'output';
-    if (normalizedKey.includes('input') || normalizedKey.includes('prompt')) nestedHint = 'input';
-
-    if (normalizedKey === 'threshold' && typeof value === 'number') {
-      const scannerName = node.name || node.scanner || node.type;
-      if (typeof scannerName === 'string') {
-        const normalized = normalizeScannerName(scannerName);
-        if (nestedHint === 'output') out.output.set(normalized, value);
-        else out.input.set(normalized, value);
-      }
-    }
-
-    extractThresholdEntries(value, nestedHint, out);
-  }
-
-  return out;
-}
-
+/* ── Load Scanners ────────────────────────────────────────────────── */
 async function loadScannerThresholds() {
-  scannerThresholds = {
-    input: new Map(DEFAULT_SCANNER_THRESHOLDS.input),
-    output: new Map(DEFAULT_SCANNER_THRESHOLDS.output)
-  };
-
+  scannerThresholds = { input: new Map(DEFAULT_THRESHOLDS.input), output: new Map(DEFAULT_THRESHOLDS.output) };
   try {
     const res = await fetch('/api/config/scanners');
     const data = await res.json();
-    const source = data?.response || data;
-    const extracted = extractThresholdEntries(source);
-
-    for (const [name, threshold] of extracted.input.entries()) {
-      scannerThresholds.input.set(name, threshold);
+    const src = data?.response||data;
+    function extractThresholds(node, hint='input', out={input:new Map(),output:new Map()}) {
+      if(!node||typeof node!=='object') return out;
+      if(Array.isArray(node)){for(const i of node) extractThresholds(i,hint,out);return out;}
+      const pn=firstDefined(node.name,node.scanner,node.type);
+      const th=Number(firstDefined(node.threshold,node.config?.threshold));
+      if(typeof pn==='string'&&pn.trim()&&!isNaN(th)){
+        const norm=normalizeScannerName(pn);
+        const tgt=String(firstDefined(node.target,node.stage,hint)).toLowerCase();
+        if(tgt.includes('output')) out.output.set(norm,th); else out.input.set(norm,th);
+      }
+      for(const [k,v] of Object.entries(node)){
+        let nh=hint;
+        const nk=k.toLowerCase();
+        if(nk.includes('output')) nh='output';
+        if(nk.includes('input')||nk.includes('prompt')) nh='input';
+        extractThresholds(v,nh,out);
+      }
+      return out;
     }
-    for (const [name, threshold] of extracted.output.entries()) {
-      scannerThresholds.output.set(name, threshold);
-    }
-  } catch (_error) {
-    // Fallback auf lokal konfigurierte Default-Thresholds.
-  }
+    const ex=extractThresholds(src);
+    for(const [n,t] of ex.input.entries()) scannerThresholds.input.set(n,t);
+    for(const [n,t] of ex.output.entries()) scannerThresholds.output.set(n,t);
+  } catch(_){}
 }
 
 async function loadActiveScanners() {
   try {
     const res = await fetch('/api/scanners/available');
-    if (!res.ok) {
-      const payload = await res.json();
-      throw new Error(payload.error || 'Scanner-Liste konnte nicht geladen werden.');
-    }
-
+    if(!res.ok) throw new Error('Scanner-Liste konnte nicht geladen werden.');
     const data = await res.json();
     cachedPromptScanners = asList(data.input_scanners);
     cachedOutputScanners = asList(data.output_scanners);
     applyScannerHighlights();
-  } catch (e) {
-    promptScannersList.innerHTML = `<li class="warn">${escapeHtml(e.message)}</li>`;
-    outputScannersList.innerHTML = `<li class="warn">${escapeHtml(e.message)}</li>`;
+  } catch(e) {
+    promptScannerTags.innerHTML = `<span class="scanner-tag" style="color:var(--warn)">${escapeHtml(e.message)}</span>`;
+    outputScannerTags.innerHTML = `<span class="scanner-tag" style="color:var(--warn)">${escapeHtml(e.message)}</span>`;
   }
 }
 
-async function sendAnalyzeRequest(endpoint, textValue, resultElement) {
-  const payload = {
-    endpoint,
-    text: textValue
-  };
+/* ── Send Request ─────────────────────────────────────────────────── */
+async function sendAnalyzeRequest(endpoint, textValue, resultEl, emptyEl, statusBadgeEl, btn) {
+  btn.disabled = true;
+  btn.classList.add('loading');
+  emptyEl.textContent = 'Analyse läuft…';
+  emptyEl.style.display = '';
+  resultEl.style.display = 'none';
+  resultEl.innerHTML = '';
+  statusBadgeEl.innerHTML = '';
 
-  resultElement.textContent = 'Sende Anfrage...';
-  debugResult.textContent = 'Sende Anfrage...';
   const startedAt = performance.now();
-
   try {
     const res = await fetch('/api/forward', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({endpoint, text: textValue})
     });
-
     const data = await res.json();
     const durationMs = Math.round(performance.now() - startedAt);
-    const debug = data.debug || {};
+    const debug = data.debug||{};
     delete data.debug;
 
     const mode = endpoint.toLowerCase().includes('/analyze/output') ? 'output' : 'prompt';
-    data.response = normalizeResponsePayload(data.response);
-    const configuredScanners = mode === 'output' ? cachedOutputScanners : cachedPromptScanners;
+    data.response = normalizeResponse(data.response);
+    const configuredScanners = mode==='output' ? cachedOutputScanners : cachedPromptScanners;
     const scannerStatuses = collectScannerStatuses(data.response, mode, configuredScanners, {
-      forceTriggeredScanners: mode === 'output' && String(textValue ?? '') !== String(firstDefined(
-        data.response?.sanitized_output,
-        data.response?.output_sanitized,
-        data.response?.output,
-        textValue
-      )) ? ['Deanonymize'] : [],
-      noScoreScanners: mode === 'output' && String(textValue ?? '') !== String(firstDefined(
-        data.response?.sanitized_output,
-        data.response?.output_sanitized,
-        data.response?.output,
-        textValue
-      )) ? ['Deanonymize'] : []
+      forceTriggeredScanners: mode==='output' && String(textValue??'')!==String(firstDefined(
+        data.response?.sanitized_output,data.response?.output_sanitized,data.response?.output,textValue
+      ))?['Deanonymize']:[],
+      noScoreScanners: mode==='output' && String(textValue??'')!==String(firstDefined(
+        data.response?.sanitized_output,data.response?.output_sanitized,data.response?.output,textValue
+      ))?['Deanonymize']:[]
     });
 
-    if (mode === 'output') {
-      applyScannerHighlights(lastTriggeredPromptScanners, buildTriggeredSet(scannerStatuses));
-    } else {
-      applyScannerHighlights(buildTriggeredSet(scannerStatuses), lastTriggeredOutputScanners);
-    }
+    if(mode==='output') applyScannerHighlights(lastTriggeredPrompt, buildTriggeredSet(scannerStatuses));
+    else applyScannerHighlights(buildTriggeredSet(scannerStatuses), lastTriggeredOutput);
 
-    resultElement.innerHTML = formatResultView(data, debug, durationMs, mode);
-    debugResult.textContent = JSON.stringify(debug, null, 2);
-  } catch (e) {
-    resultElement.textContent = 'Fehler: ' + e.message;
-    debugResult.textContent = 'Fehler: ' + e.message;
+    const {html, anyTriggered} = formatResultView(data, debug, durationMs, mode);
+    setStatusBadge(statusBadgeEl, anyTriggered, durationMs);
+    emptyEl.style.display = 'none';
+    resultEl.innerHTML = html;
+    resultEl.style.display = '';
+  } catch(e) {
+    emptyEl.textContent = 'Fehler: ' + e.message;
+    emptyEl.style.display = '';
+    resultEl.style.display = 'none';
+    setStatusBadge(statusBadgeEl, null, null);
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('loading');
   }
 }
 
-sendPromptBtn.addEventListener('click', async () => {
-  await sendAnalyzeRequest('/analyze/prompt', promptInput.value, promptResult);
-});
+/* ── Event Listeners ──────────────────────────────────────────────── */
+sendPromptBtn.addEventListener('click', () =>
+  sendAnalyzeRequest('/analyze/prompt', promptInput.value, promptResultEl, promptResultEmpty, promptStatusBadge, sendPromptBtn)
+);
 
-sendOutputBtn.addEventListener('click', async () => {
-  await sendAnalyzeRequest('/analyze/output', outputInput.value, outputResult);
-});
+sendOutputBtn.addEventListener('click', () =>
+  sendAnalyzeRequest('/analyze/output', outputInput.value, outputResultEl, outputResultEmpty, outputStatusBadge, sendOutputBtn)
+);
 
+/* ── Init ─────────────────────────────────────────────────────────── */
 Promise.all([loadScannerThresholds(), loadActiveScanners()]);
-
-function setActiveConfigTab(tabName) {
-  activeConfigTab = tabName;
-  for (const button of configTabButtons) {
-    button.classList.toggle('active', button.dataset.configTab === tabName);
-  }
-}
-
-async function loadConfig() {
-  configResult.textContent = 'Lade Konfiguration...';
-  try {
-    const route = configRoutes[activeConfigTab] || configRoutes.scanners;
-    const res = await fetch(route);
-    const data = await res.json();
-    configResult.textContent = JSON.stringify(data, null, 2);
-  } catch (e) {
-    configResult.textContent = 'Fehler beim Laden der Konfiguration: ' + e.message;
-  }
-}
-
-toggleConfigBtn.addEventListener('click', async () => {
-  const isHidden = configPanel.style.display === 'none';
-  configPanel.style.display = isHidden ? 'block' : 'none';
-  toggleConfigBtn.textContent = isHidden ? 'Konfiguration ausblenden' : 'Konfiguration anzeigen';
-
-  if (isHidden && configResult.textContent.includes('Noch nicht geladen')) {
-    await loadConfig();
-  }
-});
-
-for (const button of configTabButtons) {
-  button.addEventListener('click', async () => {
-    setActiveConfigTab(button.dataset.configTab);
-    await loadConfig();
-  });
-}
-
-reloadConfigBtn.addEventListener('click', loadConfig);
 </script>
 </body>
 </html>
