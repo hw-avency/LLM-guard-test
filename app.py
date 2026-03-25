@@ -491,6 +491,21 @@ def analyze_prompt() -> Any:
     return forward_to_upstream(endpoint="/analyze/prompt", body=body)
 
 
+@app.get("/api/threat-samples")
+def get_threat_samples() -> Any:
+    try:
+        response = requests.get(
+            "https://threatintel-813066616888.europe-west3.run.app/api/sample",
+            timeout=10,
+        )
+        response.raise_for_status()
+        data = response.json()
+        samples = (data.get("sample") or [])[:2]
+        return jsonify({"samples": [{"url": s.get("url", ""), "threat": s.get("threat", "malware")} for s in samples]})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 502
+
+
 @app.errorhandler(404)
 def not_found(_error: Exception) -> Any:
     return jsonify({"error": "Endpoint nicht gefunden."}), 404

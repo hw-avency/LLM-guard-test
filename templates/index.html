@@ -625,6 +625,160 @@
       margin: .5rem 0;
     }
 
+    /* ── Examples Section ─────────────────────────────────────── */
+    .examples-section {
+      margin-top: 2.5rem;
+    }
+
+    .examples-section-title {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      font-size: .7rem;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 1rem;
+    }
+
+    .examples-section-title svg {
+      width: 14px;
+      height: 14px;
+      stroke: var(--text-dim);
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      flex-shrink: 0;
+    }
+
+    .examples-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+
+    @media (max-width: 900px) {
+      .examples-grid { grid-template-columns: 1fr; }
+    }
+
+    .example-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .example-card-header {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      padding: .65rem 1rem;
+      background: var(--surface-2);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .example-card-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .example-card-icon svg {
+      width: 13px;
+      height: 13px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .example-card-icon.url  { background: rgba(255,90,90,.12); color: #ff8a8a; }
+    .example-card-icon.secret { background: rgba(245,166,35,.12); color: var(--warn); }
+
+    .example-card-title {
+      font-size: .8rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .example-card-subtitle {
+      font-size: .72rem;
+      color: var(--text-muted);
+      margin-left: auto;
+    }
+
+    .example-items {
+      padding: .75rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: .5rem;
+    }
+
+    .example-item {
+      display: flex;
+      align-items: center;
+      gap: .5rem;
+      background: var(--surface-3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: .45rem .65rem;
+      cursor: pointer;
+      transition: border-color var(--transition), background var(--transition);
+    }
+
+    .example-item:hover {
+      border-color: var(--border-light);
+      background: var(--surface-2);
+    }
+
+    .example-item-label {
+      font-size: .72rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .example-item-value {
+      font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+      font-size: .72rem;
+      color: var(--text);
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .example-copy-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--text-dim);
+      padding: .15rem;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      transition: color var(--transition);
+      flex-shrink: 0;
+    }
+
+    .example-copy-btn:hover { color: var(--accent); }
+    .example-copy-btn svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+    .example-loading {
+      font-size: .75rem;
+      color: var(--text-dim);
+      padding: .5rem 0;
+      font-style: italic;
+    }
+
     /* ── Scrollbar ─────────────────────────────────────────────── */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -638,12 +792,7 @@
   <header class="header">
     <div class="header-brand">
       <div class="header-logo">
-        <div class="logo-mark">
-          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2L3 7v10l9 5 9-5V7L12 2z"/>
-          </svg>
-        </div>
-        <span class="logo-text">VARIOS <span>AI</span></span>
+        <img src="/static/varios_ai_logo_white.svg" alt="VARIOS AI" style="height:28px; width:auto; display:block;">
       </div>
     </div>
     <div class="header-badge">
@@ -759,6 +908,59 @@
       </div>
 
     </div>
+
+    <!-- ── Examples Section ──────────────────────────────────────── -->
+    <section class="examples-section">
+      <div class="examples-section-title">
+        <svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2z"/></svg>
+        Testbeispiele
+      </div>
+      <div class="examples-grid">
+
+        <!-- Malicious URLs -->
+        <div class="example-card">
+          <div class="example-card-header">
+            <div class="example-card-icon url">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            </div>
+            <span class="example-card-title">Maliziöse URLs</span>
+            <span class="example-card-subtitle">MaliciousURLs Scanner · Output</span>
+          </div>
+          <div class="example-items" id="exampleUrls">
+            <span class="example-loading">Lade aktuelle URLs…</span>
+          </div>
+        </div>
+
+        <!-- Secrets -->
+        <div class="example-card">
+          <div class="example-card-header">
+            <div class="example-card-icon secret">
+              <svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            </div>
+            <span class="example-card-title">Secrets / Tokens</span>
+            <span class="example-card-subtitle">Secrets Scanner · Prompt</span>
+          </div>
+          <div class="example-items" id="exampleSecrets">
+            <div class="example-item" onclick="copyExample(this, 'promptInput')">
+              <span class="example-item-label">AWS Secret</span>
+              <span class="example-item-value">AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY</span>
+              <button class="example-copy-btn" title="Kopieren">
+                <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+            <div class="example-item" onclick="copyExample(this, 'promptInput')">
+              <span class="example-item-label">Bearer Token</span>
+              <span class="example-item-value">Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c2VyXzEyMyIsImlhdCI6MTcxMDAwMDAwMH0.SIGNATURE</span>
+              <button class="example-copy-btn" title="Kopieren">
+                <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
   </main>
 
 <script>
@@ -1130,8 +1332,49 @@ sendOutputBtn.addEventListener('click', () =>
   sendAnalyzeRequest('/analyze/output', outputInput.value, outputResultEl, outputResultEmpty, outputStatusBadge, sendOutputBtn)
 );
 
+/* ── Copy Example ────────────────────────────────────────────────── */
+function copyExample(el, targetId) {
+  const valueEl = el.querySelector('.example-item-value');
+  if (!valueEl) return;
+  const text = valueEl.textContent.trim();
+  const target = document.getElementById(targetId);
+  if (target) {
+    target.value = text;
+    target.focus();
+  }
+  navigator.clipboard?.writeText(text).catch(()=>{});
+  const btn = el.querySelector('.example-copy-btn');
+  if (btn) {
+    btn.style.color = 'var(--accent)';
+    setTimeout(() => { btn.style.color = ''; }, 1200);
+  }
+}
+
+/* ── Load Malicious URL Examples ─────────────────────────────────── */
+async function loadUrlExamples() {
+  const container = document.getElementById('exampleUrls');
+  if (!container) return;
+  try {
+    const res = await fetch('/api/threat-samples');
+    if (!res.ok) throw new Error('Fehler beim Laden');
+    const data = await res.json();
+    const samples = (data.samples || []).slice(0, 2);
+    if (!samples.length) throw new Error('Keine URLs verfügbar');
+    container.innerHTML = samples.map(s => `
+      <div class="example-item" onclick="copyExample(this, 'outputInput')">
+        <span class="example-item-label">${escapeHtml(s.threat || 'malware')}</span>
+        <span class="example-item-value">${escapeHtml(s.url)}</span>
+        <button class="example-copy-btn" title="Kopieren">
+          <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </button>
+      </div>`).join('');
+  } catch(e) {
+    container.innerHTML = `<span class="example-loading">URLs konnten nicht geladen werden.</span>`;
+  }
+}
+
 /* ── Init ─────────────────────────────────────────────────────────── */
-Promise.all([loadScannerThresholds(), loadActiveScanners()]);
+Promise.all([loadScannerThresholds(), loadActiveScanners(), loadUrlExamples()]);
 </script>
 </body>
 </html>
