@@ -274,6 +274,28 @@ def forward_to_upstream(
     else:
         data = {"raw": response.text}
 
+    # ── MaliciousURL sanitization ──────────────────────────────────────
+    # The upstream API does not redact malicious URLs in sanitized_output.
+    # When the MaliciousURLs scanner triggers (score > 0) we replace every
+    # URL found in the original output with [Malicious_URL_Removed].
+    if isinstance(data, dict) and endpoint.lower().startswith("/analyze/output"):
+        scanners_result = data.get("scanners") or {}
+        malicious_triggered = any(
+            isinstance(v, (int, float)) and v > 0
+            for k, v in scanners_result.items()
+            if "malicious" in k.lower() or "url" in k.lower()
+        )
+        if malicious_triggered:
+            import re as _re
+            _URL_RE = _re.compile(
+                r"https?://[^\s\"'<>\]\)]+",
+                _re.IGNORECASE,
+            )
+            original_output: str = body.get("output", "")
+            sanitized = _URL_RE.sub("[Malicious_URL_Removed]", original_output)
+            data["sanitized_output"] = sanitized
+    # ──────────────────────────────────────────────────────────────────
+
     return jsonify(
         {
             "status_code": response.status_code,
