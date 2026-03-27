@@ -1165,9 +1165,16 @@ function formatResultView(data, debug, durationMs, mode) {
   const rawOutput = firstDefined(requestBody?.output,response?.output,'');
   const outputWasSanitized = mode==='output' && String(rawOutput??'')!==String(sanitizedOutput??'');
 
+  // Deanonymize only force-triggers when its own score is genuinely positive
+  // (i.e. a real Anonymize→Deanonymize round-trip happened). A changed
+  // sanitized_output due to our MaliciousURL post-processing must NOT
+  // cause Deanonymize to appear as triggered.
+  const deanonymizeScore = parseNum(response?.scanners?.['Deanonymize'] ?? response?.scanners?.['deanonymize']);
+  const deanonymizeReallyTriggered = deanonymizeScore !== undefined && deanonymizeScore > 0;
+
   const scannerStatuses = collectScannerStatuses(response, mode, configuredScanners, {
-    forceTriggeredScanners: outputWasSanitized?['Deanonymize']:[],
-    noScoreScanners: outputWasSanitized?['Deanonymize']:[]
+    forceTriggeredScanners: deanonymizeReallyTriggered ? ['Deanonymize'] : [],
+    noScoreScanners: deanonymizeReallyTriggered ? ['Deanonymize'] : []
   });
 
   const anyTriggered = scannerStatuses.some(s=>s.triggered);
